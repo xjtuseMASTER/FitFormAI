@@ -1,6 +1,5 @@
 import cv2
 import yaml
-import torch
 from ultralytics import YOLO
 from tasks import pull_up
 
@@ -49,7 +48,8 @@ def process_video(input_path: str, output_path: str, model: YOLO, **keywarg: any
         keypoints = r.keypoints
         for person in keypoints:
             annotated_frame = pull_up.process_angle(annotated_frame, person.data.squeeze(0))
-            annotated_frame = pull_up.show_keypoints(annotated_frame, person.data.squeeze(0))
+            annotated_frame = pull_up.is_wrist_above_elbow(annotated_frame, person.data.squeeze(0))
+            # annotated_frame = pull_up.show_keypoints(annotated_frame, person.data.squeeze(0))
             # 写入帧到输出视频
             out.write(annotated_frame)
             
