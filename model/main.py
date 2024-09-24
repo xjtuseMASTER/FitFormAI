@@ -49,12 +49,10 @@ def process_video(input_path: str, output_path: str, model: YOLO, **keywarg: any
         keypoints = r.keypoints
         for person in keypoints:
             annotated_frame = pull_up.process_angle(annotated_frame, person.data.squeeze(0))
-            points = person.data.squeeze(0)
-            # for i in range(points.size(0)):
-            #     print(points[i])
+            annotated_frame = pull_up.show_keypoints(annotated_frame, person.data.squeeze(0))
+            # 写入帧到输出视频
+            out.write(annotated_frame)
             
-        # 写入帧到输出视频
-        out.write(annotated_frame)
 
         frame_idx += 1
         print(f"Processed frame {frame_idx}/{int(cap.get(cv2.CAP_PROP_FRAME_COUNT))}")
@@ -66,5 +64,5 @@ def process_video(input_path: str, output_path: str, model: YOLO, **keywarg: any
 
 # 调用函数处理视频
 input_video_path = "vedios/引体向上.mp4"
-output_video_path = "output/引体向上_output_x.mp4"
+output_video_path = "output/引体向上_output_x_with_angle.mp4"
 process_video(input_video_path, output_video_path, model, conf=0.8)
