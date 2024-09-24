@@ -12,13 +12,16 @@ def three_points_angle(p1: Tuple[float,float], p2: Tuple[float,float], p3: Tuple
     Returns:
         float: 角度
     """
+    if p1 == (0,0) or p2 == (0,0) or p3 == (0,0):
+        return -1.0
+    
     # 计算向量 AB 和 BC
     x1, y1 = p1
     x2, y2 = p2
     x3, y3 = p3
     
     vector_ab = (x2 - x1, y2 - y1)
-    vector_bc = (x3 - x2, y3 - y2)
+    vector_bc = (x2 - x3, y2 - y3)
     
     # 计算点积
     dot_product = vector_ab[0] * vector_bc[0] + vector_ab[1] * vector_bc[1]
@@ -35,5 +38,5 @@ def three_points_angle(p1: Tuple[float,float], p2: Tuple[float,float], p3: Tuple
     
     # 将弧度转换为度
     angle_degrees = math.degrees(angle)
-    
+
     return angle_degrees
