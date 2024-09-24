@@ -1,0 +1,2 @@
+CHECKPOINTS: "model/checkpoints/"
+MODELNAME: "yolov8x-pose.pt"
