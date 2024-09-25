@@ -36,6 +36,9 @@ def two_vector_angle(v1: Tuple[float,float], v2: Tuple[float,float]) -> float:
     Returns:
         float: 两向量夹角
     """
+    if v1 == (0,0) or v2 == (0,0):
+        return -1.0
+    
     dot_product = v1[0] * v2[0] + v1[1] * v2[1]
     
     magnitude_ab = math.sqrt(v1[0]**2 + v1[1]**2)

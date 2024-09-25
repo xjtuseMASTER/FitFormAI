@@ -83,15 +83,15 @@ def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
 
     points = Keypoints(points)
 
-    direction_vector = (0, 1.0)
+    direction_vector = (0, -1.0)
 
     l_wrist = points.get("l_wrist")
     r_wrist = points.get("r_wrist")
     l_elbow = points.get("l_elbow")
     r_elbow = points.get("r_elbow")
 
-    l_vector = l_wrist - l_elbow
-    r_vector = r_wrist - r_elbow
+    l_vector = tuple(map(lambda x, y: x - y, l_wrist, l_elbow))
+    r_vector = tuple(map(lambda x, y: x - y, r_wrist, r_elbow))
 
     l_angle = angle.two_vector_angle(l_vector,direction_vector)
     r_angle = angle.two_vector_angle(r_vector,direction_vector)
@@ -99,8 +99,8 @@ def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
     l_angle_text = f"{l_angle:.2f}"
     r_angle_text = f"{r_angle:.2f}"
 
-    l_text_location = (l_wrist + l_elbow) / 2
-    r_text_location = (r_wrist + r_elbow) / 2
+    l_text_location = tuple(map(lambda x, y: (x + y)/2, l_wrist, l_elbow))
+    r_text_location = tuple(map(lambda x, y: (x + y)/2, r_wrist, r_elbow))
 
     cv2.putText(frame, l_angle_text, tuple(map(int, l_text_location)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
     cv2.putText(frame, r_angle_text, tuple(map(int, r_text_location)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
@@ -108,7 +108,7 @@ def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
     if (l_angle + r_angle) / 2 < threshold:
            is_wrist_above_elbow = True
 
-    cv2.putText(frame, f"握距是否合适:{is_wrist_above_elbow}", (0, 0), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+    cv2.putText(frame, f"Is the grip distance appropriate?:{is_wrist_above_elbow}", (40, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 
     return frame
 
