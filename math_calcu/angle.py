@@ -12,28 +12,42 @@ def three_points_angle(p1: Tuple[float,float], p2: Tuple[float,float], p3: Tuple
     Returns:
         float: 角度
     """
-    # 计算向量 AB 和 BC
+    if p1 == (0,0) or p2 == (0,0) or p3 == (0,0):
+        return -1.0
+    
     x1, y1 = p1
     x2, y2 = p2
     x3, y3 = p3
     
     vector_ab = (x2 - x1, y2 - y1)
-    vector_bc = (x3 - x2, y3 - y2)
+    vector_bc = (x2 - x3, y2 - y3)
     
-    # 计算点积
-    dot_product = vector_ab[0] * vector_bc[0] + vector_ab[1] * vector_bc[1]
+    angle_degrees = two_vector_angle(vector_ab,vector_bc)
+
+    return angle_degrees
+
+def two_vector_angle(v1: Tuple[float,float], v2: Tuple[float,float]) -> float:
+    """计算两个向量之间的夹角
+
+    Args:
+        v1 (Tuple[float,float]): 向量1
+        v2 (Tuple[float,float]): 向量2
+
+    Returns:
+        float: 两向量夹角
+    """
+    if v1 == (0,0) or v2 == (0,0):
+        return -1.0
     
-    # 计算向量的模长
-    magnitude_ab = math.sqrt(vector_ab[0]**2 + vector_ab[1]**2)
-    magnitude_bc = math.sqrt(vector_bc[0]**2 + vector_bc[1]**2)
+    dot_product = v1[0] * v2[0] + v1[1] * v2[1]
     
-    # 计算夹角的余弦值
+    magnitude_ab = math.sqrt(v1[0]**2 + v1[1]**2)
+    magnitude_bc = math.sqrt(v2[0]**2 + v2[1]**2)
+    
     cos_theta = dot_product / (magnitude_ab * magnitude_bc)
     
-    # 计算夹角
     angle = math.acos(cos_theta)
     
-    # 将弧度转换为度
     angle_degrees = math.degrees(angle)
-    
+
     return angle_degrees
