@@ -2,7 +2,7 @@ import cv2
 import torch
 import numpy as np
 from typing import Tuple, List, TypedDict
-from math_calcu import angle
+from feature_extract import angle
 from keypoints import Keypoints
 
 def show_keypoints(frame: np.array, points: torch.Tensor) -> np.array:

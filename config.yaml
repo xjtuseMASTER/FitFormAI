@@ -1,2 +1,2 @@
-CHECKPOINTS: "model/checkpoints/"
+CHECKPOINTS: "model/"
 MODELNAME: "yolov8x-pose.pt"

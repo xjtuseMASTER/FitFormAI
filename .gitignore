@@ -1,4 +1,4 @@
-/vedios
-/output
-/model/checkpoints
+/vedios/*
+/output/*
+/model
 __pycache__/

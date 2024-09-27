@@ -50,8 +50,8 @@ def process_video(input_path: str, output_path: str, model: YOLO, **keywarg: any
 
         keypoints = extract_main_person(r)
         # processing
-        annotated_frame = pull_up.process_angle(annotated_frame, keypoints)
-        annotated_frame = pull_up.is_wrist_above_elbow(annotated_frame, keypoints)  
+        # annotated_frame = pull_up.process_angle(annotated_frame, keypoints)
+        # annotated_frame = pull_up.is_wrist_above_elbow(annotated_frame, keypoints)  
         annotated_frame = pull_up.show_keypoints(annotated_frame, keypoints)
 
         out.write(annotated_frame)
@@ -67,6 +67,6 @@ def process_video(input_path: str, output_path: str, model: YOLO, **keywarg: any
 
 
 # 调用函数处理视频
-input_video_path = "vedios/俯身划船-侧面-2.MOV"
-output_video_path = "output/俯身划船-侧面-2_output.mp4"
+input_video_path = "vedios/引体向上_3.MP4"
+output_video_path = "output/引体向上_3.mp4"
 process_video(input_video_path, output_video_path, model, conf=0.8)
