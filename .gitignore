@@ -1,5 +1,7 @@
-/output/*
-/model/*
 __pycache__/
-resource/*
-!resource/.gitkeep
+/output/**/*.csv
+/model/*.pt
+/resource/**/*.mov
+/resource/**/*.mp4
+
+
