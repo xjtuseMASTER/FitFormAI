@@ -1,12 +1,14 @@
 import sys
 sys.path.append("./tasks")
 
+import os
 import cv2
 import yaml
+from pathlib import Path
 import pandas as pd
-from utils import extract_main_person
 from tasks import pull_up
 from ultralytics import YOLO
+from tasks.task_processor import TaskProcessor
 
 with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
@@ -17,61 +19,31 @@ MODELNAME = config["MODELNAME"]
 # 加载模型
 model = YOLO(CHECKPOINTS + MODELNAME)
 
-# 视频处理
-def process_video(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+
+def resource2output() -> None:
+    """按文件夹结构,将resource文件夹中所有样本都进行数据提取,并输出为csv文件到output文件夹中方便下一步绘图,output文件夹结构和resource一致
     """
-    使用yolo处理视频,视频类型为mp4
+    src_dir = "resource"
+    dest_dir = 'output'
+    task_processor = TaskProcessor()
+    for root, dirs, files in os.walk(src_dir):
+        for file in files:
+            if file == '.gitkeep': continue
+            if file.endswith(('.mov', '.mp4')):  
+                src_path = os.path.join(root, file)
+                relative_path = os.path.relpath(src_path, src_dir)
+                relative_path_csv = relative_path.split('.')[0] + '.csv'
+                dest_path = os.path.join(dest_dir, relative_path_csv)
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
 
-    Args:
-        input_path (str): 输入视频地址
-        output_path (str): 输出视频地址
-        model (YOLO): 所使用的YOLO模型
-    """
-    # 打开视频文件
-    cap = cv2.VideoCapture(input_path)
-    if not cap.isOpened():
-        print("Error: Could not open video.")
-        return
+                task = '/'.join(Path(src_path).parts[1:4])
+                if task in task_processor.task_process_methods.keys():
+                    task_processor.process_task(src_path,dest_path,model)
 
-    # 获取视频的宽度、高度和帧率
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
+                print(f"Processed {src_path} to {dest_path}")
 
-    # # 定义视频写入对象
-    # fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 定义编解码器
-    # out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
-    # 处理视频帧
-    results = model(source=input_path, stream=True, **keywarg)  # generator of Results objects
-    frame_idx = 0
-    angles_data = []
-    for r in results:
-        # 将结果绘制在帧上
-        annotated_frame = r.plot()
-
-        keypoints = extract_main_person(r)
-        # processing
-        angles = pull_up.process_angle(keypoints)
-        angles_data.append(angles)
-
-        # out.write(annotated_frame)
-            
-        frame_idx += 1
-        print(f"Processed frame {frame_idx}/{int(cap.get(cv2.CAP_PROP_FRAME_COUNT))}")
-
-    pull_up.plot_angles(angles_data, frame_idx)
-    df = pd.DataFrame(angles_data, columns=['左肘角度', '右肘角度', '左肩角度', '右肩角度'], index= list(range(1, frame_idx + 1)))
-    df.to_csv(output_video_path, index_label='帧索引')
-
-    # 释放资源
-    cap.release()
-    # out.release()
-    cv2.destroyAllWindows()
+resource2output()
 
 
 
-# 调用函数处理视频
-input_video_path = "resource/引体向上/背部视角/标准/引体向上-背部-标准-01.mov"
-output_video_path = "output/引体向上/背部视角/标准/引体向上-背部-标准-01.csv"
-process_video(input_video_path, output_video_path, model, conf=0.8)

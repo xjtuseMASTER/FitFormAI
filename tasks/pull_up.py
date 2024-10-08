@@ -1,10 +1,12 @@
 import cv2
 import torch
+import utils
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Tuple, List, TypedDict
-from feature_extract import angle
 from keypoints import Keypoints
+from ultralytics import YOLO
 
 def show_keypoints(frame: np.array, points: torch.Tensor) -> np.array:
     """在视频帧中添加姿态节点，用于判断节点位置
@@ -48,20 +50,10 @@ def process_angle(points: torch.Tensor) -> Tuple[float, float, float, float]:
     l_hip = points.get("l_hip")
     r_hip = points.get("r_hip")
 
-    l_angle_elbow = angle.three_points_angle(l_wrist,l_elbow,l_shoulder)
-    r_angle_elbow = angle.three_points_angle(r_wrist,r_elbow,r_shoulder)
-    l_angle_shoulder = angle.three_points_angle(l_elbow,l_shoulder,l_hip)
-    r_angle_shoulder = angle.three_points_angle(r_elbow,r_shoulder,r_hip)
-
-    # l_angle_elbow_text = f"{l_angle_elbow:.2f}"
-    # r_angle_elbow_text = f"{r_angle_elbow:.2f}"
-    # l_angle_shoulder_text = f"{l_angle_shoulder:.2f}"
-    # r_angle_shoulder_text = f"{r_angle_shoulder:.2f}"
-
-    # cv2.putText(frame, l_angle_elbow_text, tuple(map(int, l_elbow)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-    # cv2.putText(frame, r_angle_elbow_text, tuple(map(int, r_elbow)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-    # cv2.putText(frame, l_angle_shoulder_text, tuple(map(int, l_shoulder)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-    # cv2.putText(frame, r_angle_shoulder_text, tuple(map(int, r_shoulder)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
+    l_angle_elbow = utils.three_points_angle(l_wrist,l_elbow,l_shoulder)
+    r_angle_elbow = utils.three_points_angle(r_wrist,r_elbow,r_shoulder)
+    l_angle_shoulder = utils.three_points_angle(l_elbow,l_shoulder,l_hip)
+    r_angle_shoulder = utils.three_points_angle(r_elbow,r_shoulder,r_hip)
 
     return (l_angle_elbow, r_angle_elbow, l_angle_shoulder, r_angle_shoulder)
 
@@ -116,8 +108,8 @@ def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
     l_vector = tuple(map(lambda x, y: x - y, l_wrist, l_elbow))
     r_vector = tuple(map(lambda x, y: x - y, r_wrist, r_elbow))
 
-    l_angle = angle.two_vector_angle(l_vector,direction_vector)
-    r_angle = angle.two_vector_angle(r_vector,direction_vector)
+    l_angle = utils.two_vector_angle(l_vector,direction_vector)
+    r_angle = utils.two_vector_angle(r_vector,direction_vector)
 
     l_angle_text = f"{l_angle:.2f}"
     r_angle_text = f"{r_angle:.2f}"
@@ -134,4 +126,29 @@ def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
     cv2.putText(frame, f"Is the grip distance appropriate?:{is_wrist_above_elbow}", (40, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 
     return frame
+
+
+def processor_standard(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+    """
+    使用yolo处理**引体向上-背部视角-标准**视频,并将分析结果以csv的格式存入指定文件夹
+
+    Args:
+        input_path (str): 输入视频地址
+        output_path (str): 输出视频地址
+        model (YOLO): 所使用的YOLO模型
+    """
+    results = model(source=input_path, stream=True, **keywarg)  # generator of Results objects
+    frame_idx = 0
+    angles_data = []
+    for r in results:
+        # processing
+        keypoints = utils.extract_main_person(r)
+        angles = process_angle(keypoints)
+        angles_data.append(angles)
+            
+        frame_idx += 1
+
+    df = pd.DataFrame(angles_data, columns=['l_elbow_angles', 'r_elbow_angles', 'l_shoulder_angles', 'r_shoulder_angles'], index= list(range(1, frame_idx + 1)))
+    df.to_csv(output_path, index_label='idx')
+
 
