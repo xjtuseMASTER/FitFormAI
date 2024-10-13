@@ -8,6 +8,42 @@ from typing import Tuple, List, TypedDict
 from keypoints import Keypoints
 from ultralytics import YOLO
 
+# TODO: 实现全部错误点判别，数据分流，返回值整合
+def pull_up_distinguish():
+    pass
+
+# TODO: 实现握距判别
+def hands_hold_distance():
+    pass
+
+# TODO: 实现手肘角度判别
+def elbow():
+    pass
+
+# TODO: 实现自由落体肩胛骨松懈判别
+def Loose_shoulder_blades_in_freeFall():
+    pass
+
+# TODO: 实现腿部弯曲角度过大判别
+def Leg_bending_angle():
+    pass
+
+# TODO： 实现动作幅度判别
+def action_amplitude():
+    pass
+
+# TODO: 实现颈部错误判别
+def neck_error():
+    pass
+
+# TODO：实现腿部摇晃判别
+def leg_shake():
+    pass
+
+# TODO：实现核心未收紧判别
+def core_not_tighten():
+    pass
+
 def show_keypoints(frame: np.array, points: torch.Tensor) -> np.array:
     """在视频帧中添加姿态节点，用于判断节点位置
 

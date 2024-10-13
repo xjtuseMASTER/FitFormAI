@@ -1,6 +1,10 @@
 import math
 import torch
+import numpy as np
 from typing import Tuple
+from scipy.signal import find_peaks
+from scipy.spatial.distance import euclidean
+from fastdtw import fastdtw
 
 __all__ = ["three_points_angle", "two_vector_angle"]
 
@@ -76,3 +80,57 @@ def two_vector_angle(v1: Tuple[float,float], v2: Tuple[float,float]) -> float:
     angle_degrees = math.degrees(angle)
 
     return angle_degrees
+
+def preprocess_wave(wave):
+    """
+    对波形进行预处理。
+
+    参数:
+    wave (np.ndarray): 输入的一维波形数据。
+
+    返回:
+    np.ndarray: 预处理后的波形数据。
+    """
+    wave = wave.to_numpy()
+    wave = wave / (np.max(np.abs(wave)) - np.min(np.abs(wave)))
+    return wave
+
+def find_peaks(wave):
+    """
+    找到波形中的峰值。
+
+    参数:
+    wave (np.ndarray): 输入的一维波形数据。
+
+    返回:
+    Tuple[np.ndarray, dict]: 峰值的索引数组和峰值属性的字典。
+    """
+    wave = wave.to_numpy()
+    peaks, properties = find_peaks(wave, height=0)
+    return peaks, properties
+
+def get_min_value(wave):
+    """
+    找到波形中的局部最小值。
+
+    参数:
+    wave (np.ndarray): 输入的一维波形数据。
+
+    返回:
+    Tuple[np.ndarray, dict]: 局部最小值的索引数组和属性的字典。
+    """
+    wave =  - wave.to_numpy()
+    peaks, properties= np.find_peaks(wave, height=0)
+    return peaks, properties
+
+
+def calculate_dtw(self, wave1, wave2):
+        """
+        计算两个波形之间的动态时间规整距离。
+        """
+        dtw_distance, _ = fastdtw(wave1, wave2, dist=euclidean)
+        return dtw_distance
+    
+def calculate_distance(self, part1, part2):
+    distance = euclidean(part1, part2)
+    return distance
