@@ -2,6 +2,9 @@ import math
 import torch
 import numpy as np
 from typing import Tuple
+import pandas as pd
+from keypoints import Keypoints
+from ultralytics import YOLO
 from scipy.signal import find_peaks
 from scipy.spatial.distance import euclidean
 from fastdtw import fastdtw
@@ -80,6 +83,56 @@ def two_vector_angle(v1: Tuple[float,float], v2: Tuple[float,float]) -> float:
     angle_degrees = math.degrees(angle)
 
     return angle_degrees
+
+def get_points(points: torch.Tensor) -> Tuple[float, float, float, float, float, float, float, float, float]:
+    if points.size(0) == 0: return (0, 0, 0, 0)
+
+    points = Keypoints(points)
+
+    l_knee = points.get("l_knee")
+    r_knee = points.get("r_knee")
+    l_ankle = points.get("l_ankle")
+    r_ankle = points.get("r_ankle")
+    l_wrist = points.get("l_wrist")
+    r_wrist = points.get("r_wrist")
+    l_elbow = points.get("l_elbow")
+    r_elbow = points.get("r_elbow")
+    l_shoulder = points.get("l_shoulder")
+    r_shoulder = points.get("r_shoulder")
+    l_hip = points.get("l_hip")
+    r_hip = points.get("r_hip")
+
+    return 
+
+def processor_standard(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+    """
+    使用yolo处理**引体向上-背部视角-标准**视频,并将分析结果以csv的格式存入指定文件夹
+
+    Args:
+        input_path (str): 输入视频地址
+        output_path (str): 输出视频地址
+        model (YOLO): 所使用的YOLO模型
+    """
+    results = model(source=input_path, stream=True, **keywarg)  # generator of Results objects
+    frame_idx = 0
+    all_keypoints = []  # 用于存储所有帧的关键点
+    for r in results:
+        # processing
+        keypoints = extract_main_person(r)
+        all_keypoints.append(keypoints)  # 将每一帧的关键点添加到列表中    
+        frame_idx += 1
+
+    print(frame_idx)    
+    df = pd.DataFrame(all_keypoints, columns=[
+            'nose', 'l_eye', 'r_eye', 'l_ear', 'r_ear',
+            'l_shoulder', 'r_shoulder', 'l_elbow', 'r_elbow',
+            'l_wrist', 'r_wrist', 'l_hip', 'r_hip',
+            'l_knee', 'r_knee', 'l_ankle', 'r_ankle'], index= list(range(1, frame_idx + 1)))
+    df.to_csv(output_path, index_label='idx')
+
+model = YOLO(r"E:\深度学习算法学习\项目管理\FitFormAI\model\yolov8m-pose.pt")
+processor_standard(r"E:\深度学习算法学习\项目管理\FitFormAI\resource\引体向上\背部视角\标准\引体向上-背部-标准-03.mov",
+                   r"E:\深度学习算法学习\项目管理\FitFormAI\output", model)
 
 def preprocess_wave(wave):
     """
