@@ -1,10 +1,12 @@
 import math
+import cv2
 import torch
 import numpy as np
-from typing import Tuple
+from typing import Any, Tuple
 from scipy.signal import find_peaks
 from scipy.spatial.distance import euclidean
 from fastdtw import fastdtw
+from ultralytics import YOLO
 
 __all__ = ["three_points_angle", "two_vector_angle"]
 
@@ -29,6 +31,49 @@ def extract_main_person(result: torch.Tensor) -> torch.Tensor:
             main_person_index = i
 
     return result.keypoints[main_person_index].data.squeeze()
+
+
+def video2video_base_(process_methods: Any, input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+    """将传入视频做处理并输出标记后视频的基本方法，将打开视频，定义编码器，逐帧分析逻辑等通用代码进行封装，以便复用，实现新的vedio2vedio方法是，只需实现相应的process_methods方法即可
+
+    Args:
+        process_methods (Any): 特定任务/视角的视频帧处理方法
+        input_path (str): 视频输入地址
+        output_path (str): 视频输出地址，输出格式为mp4
+        model (YOLO): 使用的YOLO模型
+    """
+    # 打开视频文件
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        print("Error: Could not open video.")
+        return
+
+    # 获取视频的宽度、高度和帧率
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 定义编解码器
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    results = model(source=input_path, stream=True, **keywarg)  
+    frame_idx = 0
+    for r in results:
+        annotated_frame = r.plot()
+
+        keypoints = extract_main_person(r)
+        # processing
+        annotated_frame = process_methods(annotated_frame, keypoints)
+
+        out.write(annotated_frame)
+            
+        frame_idx += 1
+    
+    # 释放资源
+    cap.release()
+    out.release()
+    cv2.destroyAllWindows()
+
 
 def three_points_angle(p1: Tuple[float,float], p2: Tuple[float,float], p3: Tuple[float,float]) -> float:
     """计算三个点之间的夹角，p2为中间折点

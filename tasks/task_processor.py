@@ -3,28 +3,57 @@ from pathlib import Path
 from ultralytics import YOLO
 
 class TaskProcessor:
-    """对任务处理方法的包装,按照resource文件夹目录结构,通过文件路径获得相应的数据提取方法
+    """对YOLO模型以及任务处理方法的封装,按照resource文件夹目录结构,通过文件路径获得相应的数据提取方法,以及相应的输出路径
     """
-    def __init__(self) -> None:
-        self.task_process_methods = {
-            # '引体向上/背部视角/标准':pull_up.processor_standard,
-            '引体向上/背部视角/脊柱侧弯':pull_up.processor_standard,
-            # '引体向上/背部视角/肩胛不稳定':pull_up.processor_standard,
-            # '引体向上/背部视角/握距不合适':pull_up.processor_standard
+    def __init__(self, model: YOLO) -> None:
+        self.model = model
+        self.video2csv_methods = {  
+            #同一视角可以提取的数据特征基本一致，故video2csv_methods以**动作/视角**区分
+            '引体向上/背部视角':pull_up.back_video2csv,
+            '引体向上/侧面视角':pull_up.side_video2csv,
+        }
+        self.video2video_methods = {
+            '引体向上/背部视角':pull_up.back_video2video,
+            '引体向上/侧面视角':pull_up.side_video2video,
         }
     
-    def process_task(self, input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
-        """动作分析统一方法，通过input_path判断任务处理方法，并调用相关函数.该方法统一传入参数input_path、output_path、model
+
+    def process_video2csv(self, input_path: str, **keywarg: any) -> str:
+        """处理视频特征并输出为csv文件的统一方法，通过input_path判断任务处理为csv的方法，并调用相关函数.该方法统一传入参数input_path
 
         Args:
-            input_path (str): 输入视频路径
-            output_path (str): 输出路径
-            model (YOLO): 所使用的YOLO模型
+            input_path (str): 输入视频路径，例如："./resource/引体向上/背部视角/标准/引体向上-背部-标准-01.mov"
 
+        Returns:
+            str: 输出csv文件的路径
         """
-        task = '/'.join(Path(input_path).parts[1:4])
-        method = self.task_process_methods.get(task)
+        task = '/'.join(Path(input_path).parts[1:3])
+        output_path = '.' + input_path.replace("resource", "output").split('.')[1] + '.csv'
+        method = self.video2csv_methods.get(task)
         if method:
-            return method(input_path,output_path,model)
+            method(input_path,output_path, self.model)
+            print(f"Processed {input_path} to {output_path}")
+            return output_path
         else:
-            raise ValueError(f"错误:未找到任务的处理方法: {task}")
+            raise ValueError(f"错误:未找到该任务的csv处理方法: {task},请查看TaskProcessor类video2csv_methods属性")
+        
+
+    
+    def process_video2vedio(self, input_path: str, **keywarg: any) -> str:
+        """将数据特征标记到每一视频帧的统一方法，通过input_path判断任务处理为视频的方法，并调用相关函数.该方法统一传入参数input_path
+
+        Args:
+            input_path (str): 输入视频路径，例如："./resource/引体向上/背部视角/标准/引体向上-背部-标准-01.mov"
+
+        Returns:
+            str: 输出mp4文件的路径
+        """
+        task = '/'.join(Path(input_path).parts[1:3])
+        output_path = '.' + input_path.replace("resource", "output").split('.')[1] + '.mp4'
+        method = self.video2video_methods.get(task)
+        if method:
+            method(input_path,output_path, self.model)
+            print(f"Processed {input_path} to {output_path}")
+            return output_path
+        else:
+            raise ValueError(f"错误:未找到该任务的视频帧处理方法: {task},请查看TaskProcessor类video2vedio_methods属性")

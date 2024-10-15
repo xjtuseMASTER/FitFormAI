@@ -1,6 +1,7 @@
 __pycache__/
-/output/**/*.csv
 /model/*.pt
+/output/**/*.csv
+/output/**/*.mp4
 /resource/**/*.mov
 /resource/**/*.MOV
 /resource/**/*.mp4

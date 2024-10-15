@@ -3,8 +3,7 @@ import torch
 import utils
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from typing import Tuple, List, TypedDict
+from typing import Tuple, List, Any
 from keypoints import Keypoints
 from ultralytics import YOLO
 
@@ -64,7 +63,7 @@ def show_keypoints(frame: np.array, points: torch.Tensor) -> np.array:
     return frame
 
 
-def process_angle(points: torch.Tensor) -> Tuple[float, float, float, float]:
+def extract_angles(points: torch.Tensor) -> Tuple[float, float, float, float]:
     """引体向上动作必要角度信息提取
 
     Args:
@@ -75,16 +74,16 @@ def process_angle(points: torch.Tensor) -> Tuple[float, float, float, float]:
     """
     if points.size(0) == 0: return (0, 0, 0, 0)
 
-    points = Keypoints(points)
+    keypoints = Keypoints(points)
 
-    l_wrist = points.get("l_wrist")
-    r_wrist = points.get("r_wrist")
-    l_elbow = points.get("l_elbow")
-    r_elbow = points.get("r_elbow")
-    l_shoulder = points.get("l_shoulder")
-    r_shoulder = points.get("r_shoulder")
-    l_hip = points.get("l_hip")
-    r_hip = points.get("r_hip")
+    l_wrist = keypoints.get("l_wrist")
+    r_wrist = keypoints.get("r_wrist")
+    l_elbow = keypoints.get("l_elbow")
+    r_elbow = keypoints.get("r_elbow")
+    l_shoulder = keypoints.get("l_shoulder")
+    r_shoulder = keypoints.get("r_shoulder")
+    l_hip = keypoints.get("l_hip")
+    r_hip = keypoints.get("r_hip")
 
     l_angle_elbow = utils.three_points_angle(l_wrist,l_elbow,l_shoulder)
     r_angle_elbow = utils.three_points_angle(r_wrist,r_elbow,r_shoulder)
@@ -93,28 +92,38 @@ def process_angle(points: torch.Tensor) -> Tuple[float, float, float, float]:
 
     return (l_angle_elbow, r_angle_elbow, l_angle_shoulder, r_angle_shoulder)
 
-def plot_angles(angle_data: list, frame_idx: int):
-    """绘制角度折线图
+
+
+def plot_angles(frame: np.array ,points: torch.Tensor) -> np.array:
+    """将提取出的角度信息绘制在每一视频帧，并返回新的视频帧
 
     Args:
-        angle_data (list): 包含每帧的四个角度的数据
-        frame_indices (int): 帧的索引
+        frame (np.array): 原视频帧
+        points (torch.Tensor): 节点集合
+
+    Returns:
+        np.array: 绘制角度信息后的视频帧
     """
-    l_elbow_angles, r_elbow_angles, l_shoulder_angles, r_shoulder_angles = zip(*angle_data)
+    angles = extract_angles(points)
+    keypoints = Keypoints(points)
 
-    idx_list = list(range(1, frame_idx + 1))
-    plt.figure(figsize=(10, 5))
-    plt.plot(idx_list, l_elbow_angles, label='l_elbow_angles', marker='o')
-    plt.plot(idx_list, r_elbow_angles, label='r_elbow_angles', marker='o')
-    plt.plot(idx_list, l_shoulder_angles, label='l_shoulder_angles', marker='o')
-    plt.plot(idx_list, r_shoulder_angles, label='r_shoulder_angles', marker='o')
+    l_shoulder = keypoints.get("l_shoulder")
+    r_shoulder = keypoints.get("r_shoulder")
+    l_elbow = keypoints.get("l_elbow")
+    r_elbow = keypoints.get("r_elbow")
 
-    plt.xlabel('frame_idx')
-    plt.ylabel('angles')
-    plt.title('Change of the angle of pull-up action')
-    plt.legend()
-    plt.grid()
-    plt.savefig('output/angles_plot.png')
+    l_angle_elbow_text = f"{angles[0]:.2f}"
+    r_angle_elbow_text = f"{angles[1]:.2f}"
+    l_angle_shoulder_text = f"{angles[2]:.2f}"
+    r_angle_shoulder_text = f"{angles[3]:.2f}"
+
+    cv2.putText(frame, l_angle_elbow_text, tuple(map(int, l_elbow)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
+    cv2.putText(frame, r_angle_elbow_text, tuple(map(int, r_elbow)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
+    cv2.putText(frame, l_angle_shoulder_text, tuple(map(int, l_shoulder)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
+    cv2.putText(frame, r_angle_shoulder_text, tuple(map(int, r_shoulder)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
+
+    return frame
+
 
 
 def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
@@ -164,13 +173,13 @@ def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
     return frame
 
 
-def processor_standard(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+def back_video2csv(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
     """
-    使用yolo处理**引体向上-背部视角-标准**视频,并将分析结果以csv的格式存入指定文件夹
+    使用YOLO处理**引体向上/背部视角**视频,并将分析结果以csv的格式存入指定文件夹
 
     Args:
         input_path (str): 输入视频地址
-        output_path (str): 输出视频地址
+        output_path (str): 输出csv地址
         model (YOLO): 所使用的YOLO模型
     """
     results = model(source=input_path, stream=True, **keywarg)  # generator of Results objects
@@ -179,7 +188,7 @@ def processor_standard(input_path: str, output_path: str, model: YOLO, **keywarg
     for r in results:
         # processing
         keypoints = utils.extract_main_person(r)
-        angles = process_angle(keypoints)
+        angles = extract_angles(keypoints)
         angles_data.append(angles)
             
         frame_idx += 1
@@ -187,4 +196,70 @@ def processor_standard(input_path: str, output_path: str, model: YOLO, **keywarg
     df = pd.DataFrame(angles_data, columns=['l_elbow_angles', 'r_elbow_angles', 'l_shoulder_angles', 'r_shoulder_angles'], index= list(range(1, frame_idx + 1)))
     df.to_csv(output_path, index_label='idx')
 
+
+# TODO: 实现侧面视角的数据提取，并为合适的数据构建csv
+def side_video2csv(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+    """
+    使用YOLO处理**引体向上/侧面视角**视频,并将分析结果以csv的格式存入指定文件夹
+
+    Args:
+        input_path (str): 输入视频地址
+        output_path (str): 输出csv地址
+        model (YOLO): 所使用的YOLO模型
+    """
+    pass
+
+
+def back_video2video_(frame: np.array ,points: torch.Tensor) -> np.array:
+    """back_video2video的辅助方法，背部视角的处理逻辑精简集中于此，这里定义了对每一视频帧的处理逻辑
+
+    Args:
+        frame (np.array): 原视频帧
+        points (torch.Tensor): 骨架节点集合
+
+    Returns:
+        np.array: 处理后的视频帧
+    """
+    # processing
+    frame = plot_angles(frame, points)
+
+    return frame
+
+
+def back_video2video(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+    """
+    使用YOLO处理**引体向上/背部视角**视频,添加便于直观感受的特征展示,并将分析结果以mp4的格式存入指定文件夹
+
+    Args:
+        input_path (str): 输入视频地址
+        output_path (str): 输出mp4地址
+        model (YOLO): 所使用的YOLO模型
+    """
+    utils.video2video_base_(back_video2video_, input_path, output_path, model, **keywarg)
+
+
+# TODO: 侧面视角每一视频帧的处理逻辑
+def side_video2video_(frame: np.array ,points: torch.Tensor) -> np.array:
+    """side_video2video的辅助方法，侧面视角的处理逻辑精简集中于此，这里定义了对每一视频帧的处理逻辑
+
+    Args:
+        frame (np.array): 原视频帧
+        points (torch.Tensor): 骨架节点集合
+
+    Returns:
+        np.array: 处理后的视频帧
+    """
+    pass
+
+
+def side_video2video(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+    """
+    使用YOLO处理**引体向上/背部视角**视频,添加便于直观感受的特征展示,并将分析结果以mp4的格式存入指定文件夹
+
+    Args:
+        input_path (str): 输入视频地址
+        output_path (str): 输出mp4地址
+        model (YOLO): 所使用的YOLO模型
+    """
+    utils.video2video_base_(side_video2video_, input_path, output_path, model, **keywarg)
 
