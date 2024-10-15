@@ -2,6 +2,7 @@ __pycache__/
 /output/**/*.csv
 /model/*.pt
 /resource/**/*.mov
+/resource/**/*.MOV
 /resource/**/*.mp4
 
 

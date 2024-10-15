@@ -7,8 +7,8 @@ class TaskProcessor:
     """
     def __init__(self) -> None:
         self.task_process_methods = {
-            '引体向上/背部视角/标准':pull_up.processor_standard,
-            # '引体向上/背部视角/脊柱侧弯':pull_up.processor_standard,
+            # '引体向上/背部视角/标准':pull_up.processor_standard,
+            '引体向上/背部视角/脊柱侧弯':pull_up.processor_standard,
             # '引体向上/背部视角/肩胛不稳定':pull_up.processor_standard,
             # '引体向上/背部视角/握距不合适':pull_up.processor_standard
         }
