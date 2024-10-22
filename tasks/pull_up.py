@@ -43,35 +43,11 @@ def leg_shake():
 def core_not_tighten():
     pass
 
-def show_keypoints(frame: np.array, points: torch.Tensor) -> np.array:
-    """在视频帧中添加姿态节点，用于判断节点位置
-
-    Args:
-        frame (np.array): 输入视频帧
-        points (torch.Tensor): 姿态骨架节点
-
-    Returns:
-        np.array: 添加了节点标注的视频帧
-    """
-    if points.size(0) == 0: return frame
-
-    keypoints = Keypoints(points)
-
-    for keypoint in keypoints.get_all_keypoints():
-        cv2.putText(frame, keypoint["part"], tuple(map(int, keypoint["location"])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-
-    return frame
 
 
 def extract_angles(points: torch.Tensor) -> Tuple[float, float, float, float]:
-    """引体向上动作必要角度信息提取
+    """引体向上动作必要角度信息提取,提取到的单帧角度信息,格式为包含四个角度的元组(l_angle_elbow, r_angle_elbow, l_angle_shoulder, r_angle_shoulder)"""
 
-    Args:
-        points (torch.Tensor): 姿态骨架节点
-
-    Returns:
-        angles(Tuple[float, float, float, float]):提取到的单帧角度信息,格式为包含四个角度的元组(l_angle_elbow, r_angle_elbow, l_angle_shoulder, r_angle_shoulder)
-    """
     if points.size(0) == 0: return (0, 0, 0, 0)
 
     keypoints = Keypoints(points)
@@ -95,15 +71,8 @@ def extract_angles(points: torch.Tensor) -> Tuple[float, float, float, float]:
 
 
 def plot_angles(frame: np.array ,points: torch.Tensor) -> np.array:
-    """将提取出的角度信息绘制在每一视频帧，并返回新的视频帧
+    """extract_angles将提取出的角度信息绘制在每一视频帧，并返回新的视频帧"""
 
-    Args:
-        frame (np.array): 原视频帧
-        points (torch.Tensor): 节点集合
-
-    Returns:
-        np.array: 绘制角度信息后的视频帧
-    """
     angles = extract_angles(points)
     keypoints = Keypoints(points)
 
@@ -127,15 +96,8 @@ def plot_angles(frame: np.array ,points: torch.Tensor) -> np.array:
 
 
 def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
-    """判断手腕是否在手肘正上方，用于判断握距是否合适
+    """判断手腕是否在手肘正上方，用于判断握距是否合适"""
 
-    Args:
-        frame (np.array): 输入视频帧
-        points (torch.Tensor): 姿态骨架节点
-
-    Returns:
-        np.array: 添加了握距判断信息的输出视频帧
-    """
     if points.size(0) == 0: return frame
 
     is_wrist_above_elbow = False
@@ -254,7 +216,7 @@ def side_video2video_(frame: np.array ,points: torch.Tensor) -> np.array:
 
 def side_video2video(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
     """
-    使用YOLO处理**引体向上/背部视角**视频,添加便于直观感受的特征展示,并将分析结果以mp4的格式存入指定文件夹
+    使用YOLO处理**引体向上/侧面视角**视频,添加便于直观感受的特征展示,并将分析结果以mp4的格式存入指定文件夹
 
     Args:
         input_path (str): 输入视频地址

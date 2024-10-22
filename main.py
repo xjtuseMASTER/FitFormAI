@@ -1,3 +1,4 @@
+import os
 import sys
 sys.path.append("./tasks")
 import yaml
@@ -20,6 +21,25 @@ def setup_model() -> YOLO:
     return YOLO(CHECKPOINTS + MODELNAME)
 
 
-src_file = "./resource/引体向上/背部视角/标准/引体向上-背部-标准-01.mov"
+
+def process_by_view(src_view_dir: str) -> None:
+    """按文件夹结构,将resource文件夹中所有样本都进行数据提取,并输出为cSV文件到output文件夹中方便下一步绘图"""
+    dest_dir = 'output'
+    task_processor = TaskProcessor(setup_model())
+
+    for root, dirs, files in os.walk(src_view_dir):
+        for file in files:
+            if file == '.gitkeep': continue 
+            if file.endswith(('.MOV', '.mov', '.mp4')):
+                src_path = os.path.join(root, file)
+                # processing
+                task_processor.process_video2csv(src_path)
+
+# process_by_view("resource/仰卧起坐/侧面视角")
+
+
+src_file = "resource/仰卧起坐/侧面视角/标准/仰卧起坐-侧面视角-标准.MOV"
 task_processor = TaskProcessor(setup_model())
 dest_path = task_processor.process_video2vedio(src_file)
+
+

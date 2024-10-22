@@ -1,4 +1,5 @@
-import pull_up
+import os
+import pull_up, set_ups
 from pathlib import Path
 from ultralytics import YOLO
 
@@ -11,10 +12,12 @@ class TaskProcessor:
             #同一视角可以提取的数据特征基本一致，故video2csv_methods以**动作/视角**区分
             '引体向上/背部视角':pull_up.back_video2csv,
             '引体向上/侧面视角':pull_up.side_video2csv,
+            '仰卧起坐/侧面视角':set_ups.side_video2csv
         }
         self.video2video_methods = {
             '引体向上/背部视角':pull_up.back_video2video,
             '引体向上/侧面视角':pull_up.side_video2video,
+            '仰卧起坐/侧面视角':set_ups.side_video2video
         }
     
 
@@ -22,13 +25,21 @@ class TaskProcessor:
         """处理视频特征并输出为csv文件的统一方法，通过input_path判断任务处理为csv的方法，并调用相关函数.该方法统一传入参数input_path
 
         Args:
-            input_path (str): 输入视频路径，例如："./resource/引体向上/背部视角/标准/引体向上-背部-标准-01.mov"
+            input_path (str): 输入视频路径，例如："resource/引体向上/背部视角/标准/引体向上-背部-标准-01.mov"
 
         Returns:
             str: 输出csv文件的路径
         """
         task = '/'.join(Path(input_path).parts[1:3])
-        output_path = '.' + input_path.replace("resource", "output").split('.')[1] + '.csv'
+        output_path = input_path.replace("resource", "output").split('.')[0] + '.csv'
+
+        directory = os.path.dirname(output_path)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            # add .gitkeep
+            with open(os.path.join(directory, '.gitkeep'), 'w') as gitkeep:
+                gitkeep.write('')
+
         method = self.video2csv_methods.get(task)
         if method:
             method(input_path,output_path, self.model)
@@ -43,16 +54,24 @@ class TaskProcessor:
         """将数据特征标记到每一视频帧的统一方法，通过input_path判断任务处理为视频的方法，并调用相关函数.该方法统一传入参数input_path
 
         Args:
-            input_path (str): 输入视频路径，例如："./resource/引体向上/背部视角/标准/引体向上-背部-标准-01.mov"
+            input_path (str): 输入视频路径，例如："resource/引体向上/背部视角/标准/引体向上-背部-标准-01.mov"
 
         Returns:
             str: 输出mp4文件的路径
         """
         task = '/'.join(Path(input_path).parts[1:3])
-        output_path = '.' + input_path.replace("resource", "output").split('.')[1] + '.mp4'
+        output_path = input_path.replace("resource", "output").split('.')[0] + '.mp4'
+
+        directory = os.path.dirname(output_path)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            # add .gitkeep
+            with open(os.path.join(directory, '.gitkeep'), 'w') as gitkeep:
+                gitkeep.write('')
+
         method = self.video2video_methods.get(task)
         if method:
-            method(input_path,output_path, self.model)
+            method(input_path, output_path, self.model)
             print(f"Processed {input_path} to {output_path}")
             return output_path
         else:

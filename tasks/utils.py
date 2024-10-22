@@ -8,7 +8,9 @@ from scipy.spatial.distance import euclidean
 from fastdtw import fastdtw
 from ultralytics import YOLO
 
-__all__ = ["three_points_angle", "two_vector_angle"]
+from keypoints import Keypoints
+
+__all__ = ["extract_main_person", "show_keypoints", "video2video_base_", "three_points_angle"]
 
 def extract_main_person(result: torch.Tensor) -> torch.Tensor:
     """抽取画面中的主体人物，一般来说拍摄主体总会是面积最大的一个，所以可以通过比较所有person的面积得到主体人物
@@ -31,6 +33,26 @@ def extract_main_person(result: torch.Tensor) -> torch.Tensor:
             main_person_index = i
 
     return result.keypoints[main_person_index].data.squeeze()
+
+
+def show_keypoints(frame: np.array, points: torch.Tensor) -> np.array:
+    """在视频帧中添加姿态节点，用于判断节点位置
+
+    Args:
+        frame (np.array): 输入视频帧
+        points (torch.Tensor): 姿态骨架节点
+
+    Returns:
+        np.array: 添加了节点标注的视频帧
+    """
+    if points.size(0) == 0: return frame
+
+    keypoints = Keypoints(points)
+
+    for keypoint in keypoints.get_all_keypoints():
+        cv2.putText(frame, keypoint["part"], tuple(map(int, keypoint["location"])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+
+    return frame
 
 
 def video2video_base_(process_methods: Any, input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
@@ -125,6 +147,19 @@ def two_vector_angle(v1: Tuple[float,float], v2: Tuple[float,float]) -> float:
     angle_degrees = math.degrees(angle)
 
     return angle_degrees
+
+def euclidean_distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
+    """计算两点之间的欧几里得距离
+
+    Args:
+        p1 (Tuple[float, float]): 点1坐标
+        p2 (Tuple[float, float]): 点2坐标
+
+    Returns:
+        float: 距离
+    """
+    
+    return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 def preprocess_wave(wave):
     """
