@@ -3,45 +3,122 @@ import torch
 import utils
 import numpy as np
 import pandas as pd
-from typing import Tuple, List, Any
+from typing import Tuple, List, Any, TypedDict
 from keypoints import Keypoints
 from ultralytics import YOLO
 
-# TODO: 实现全部错误点判别，数据分流，返回值整合
-def pull_up_distinguish():
-    pass
+class PullUpInfo(TypedDict):
+    # TODO: 定义返回值类型
+    """
+    TODO
+    leftElbow (Tuple[float, float]): 手肘坐标
+    rightElbow (Tuple[float, float]): 手肘坐标
+    leftWrist (Tuple[float, float]): 手腕坐标
+    rightWrist (Tuple[float, float]): 手腕坐标
+    """
+    high_leftElbow : Tuple[float, float]
+    high_rightElbow : Tuple[float, float]
+    high_leftWrist : Tuple[float, float]
+    high_rightWrist : Tuple[float, float]
+    wristDistance : float # 手腕距离，正值
+    shoulderDistance : float # 肩膀距离，正值
 
-# TODO: 实现握距判别
-def hands_hold_distance():
-    pass
+    hipBoneRange : float # 髋骨极差，需要左右极差平均值, 正值
 
-# TODO: 实现手肘角度判别
-def elbow():
-    pass
+    mean_wrist_elbow_horizon_angle : Tuple[float, float] # 正值，两个-left and right，均值
 
-# TODO: 实现自由落体肩胛骨松懈判别
-def Loose_shoulder_blades_in_freeFall():
-    pass
+    low_wrist_elbow_shoulder_angle : float # 正值, 最低点
+    high_wrist_elbow_shoulder_angle : float # 正值, 最高点
 
-# TODO: 实现腿部弯曲角度过大判别
-def Leg_bending_angle():
-    pass
 
-# TODO： 实现动作幅度判别
-def action_amplitude():
-    pass
+class PullUp:
+    def __init__(self, info: PullUpInfo) -> None:
+        self.info = info
 
-# TODO: 实现颈部错误判别
-def neck_error():
-    pass
 
-# TODO：实现腿部摇晃判别
-def leg_shake():
-    pass
+    def pullUpDataProcess(self) -> PullUpInfo:
+        # 应该实现到顶层函数（调用所有判别的函数），这里写上方法，避免忘记
+        pass
 
-# TODO：实现核心未收紧判别
-def core_not_tighten():
-    pass
+    # TODO: 实现全部错误点判别，数据分流，返回值整合
+    # 是否需要实现再议
+    def pull_up_distinguish():
+        pass
+
+    def hands_hold_distance(self) -> str:
+        '''判断手腕是否在手肘正上方，用于判断握距是否合适'''
+        # TODO 临时阈值
+        wide_threshold = 5
+        narrow_threshold = 3
+        wide_alpha = 1.5
+        narrow_alpha = 1.3
+
+        leftDistance = self.info['high_leftWrist'][0] - self.info['high_leftElbow'][0]
+        rightDistance = self.info['high_rightWrist'][0] - self.info['high_rightElbow'][0]
+
+        if (leftDistance < narrow_threshold and leftDistance > -wide_threshold and rightDistance < wide_threshold 
+              and rightDistance > -narrow_threshold and self.info['wristDistance'] > narrow_alpha * self.info['shoulderDistance'] 
+              and self.info['wristDistance'] < wide_alpha * self.info['shoulderDistance']):
+            return "正确"
+        elif (leftDistance > narrow_threshold and rightDistance < -narrow_threshold 
+              and self.info['wristDistance'] < narrow_alpha * self.info['shoulderDistance']):
+            return "握距过窄"
+        elif (leftDistance < -wide_threshold and rightDistance > wide_threshold 
+              and self.info['wristDistance'] > wide_alpha * self.info['shoulderDistance']):
+            return "握距过宽"
+        else:
+            return "worng info" # TODO 高级层面收到信号后特殊处理
+
+    def elbow(self) -> str:
+        '''实现手肘角度判别'''
+        # TODO 临时阈值
+        tuck_threshold = 30
+        back_threshold = 10
+
+        if (self.info['mean_wrist_elbow_horizon_angle'][0] > back_threshold and self.info['mean_wrist_elbow_horizon_angle'][1] > back_threshold
+              and self.info['mean_wrist_elbow_horizon_angle'][0] < tuck_threshold and self.info['mean_wrist_elbow_horizon_angle'][1] < tuck_threshold):
+            return "正确"
+        elif self.info['mean_wrist_elbow_horizon_angle'][0] > tuck_threshold and self.info['mean_wrist_elbow_horizon_angle'][1] > tuck_threshold:
+            return "手肘内收"
+        elif self.info['mean_wrist_elbow_horizon_angle'][0] < back_threshold and self.info['mean_wrist_elbow_horizon_angle'][1] < back_threshold:
+            return "手肘后张"
+        else:
+            return "wrong info"
+
+    def Loose_shoulder_blades_in_freeFall(self) -> str:
+        '''自由落体肩胛骨松懈判别'''
+        # TODO 临时阈值
+        threshold = 160
+
+        if self.info['low_wrist_elbow_shoulder_angle'] < threshold:
+            return "正确"
+        else:
+            return "自由落体肩胛骨松懈"
+
+    # TODO: 实现腿部弯曲角度过大判别
+    def Leg_bending_angle():
+        pass
+
+    # TODO： 实现动作幅度判别
+    def action_amplitude():
+        pass
+
+    # TODO: 实现颈部错误判别
+    def neck_error():
+        pass
+
+    # TODO：实现腿部摇晃判别
+    def leg_shake():
+        pass
+
+    def core_not_tighten(self) -> str:
+        '''实现核心不稳定判别'''
+        # TODO: 临时阈值
+        threshold = 5
+        if self.info['hipBoneRange'] < threshold:
+            return "正确"
+        else:
+            return "核心未收紧"
 
 
 

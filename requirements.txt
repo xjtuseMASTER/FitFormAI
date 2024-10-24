@@ -1,2 +1,3 @@
 ultralytics~=8.2.99
 torch~=2.4.0
+fastdtw
