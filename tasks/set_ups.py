@@ -4,9 +4,56 @@ import pandas as pd
 from ultralytics import YOLO
 import utils
 import torch
+from typing import TypedDict, Union
 import numpy as np
 from keypoints import Keypoints
 
+def SetUpInfo(TypedDict):
+    peak_angle_hip: float
+    trough_angle_hip: float
+    peak_angle_knee: float
+    trough_angle_knee: float
+    peak_back_ground_angle: float
+    trough_back_ground_angle: float
+
+
+class SetUp:
+    def __init__(self, info: SetUpInfo) -> None:
+        self.info = info
+
+    def unreasonable_leg_folding_angle(self) -> Union[str, bool]:
+        """判断折腿角度是否合理"""
+        peak_threshold = 90
+        trough_threshold = 60
+
+        if self.info["peak_angle_knee"] >= peak_threshold:
+            return '折腿角度不合理：过大'
+        elif self.info["trough_angle_knee"] <= trough_threshold:
+            return '折腿角度不合理：过小'
+        else:
+            return False
+        
+    def shoulder_not_touch_with_cushion(self) -> Union[str, bool]:
+        """判断肩胛骨是否触垫"""
+        trough_threshold = 5
+        if self.info["trough_back_ground_angle"] >= trough_threshold:
+            return '肩胛骨未触垫'
+        else:
+            return False
+        
+    def elbows_not_touch_thighs(self) -> Union[str, bool]:
+        """判断双肘是否触及大腿"""
+        trough_threshold = 70
+        if self.info["trough_angle_hip"] >= 70:
+            return "双肘未触及大腿"
+        else:
+            return False
+
+    def waist_bounce(self)-> Union[str, bool]:
+        """判断是否存在腰部弹震借力的情况"""
+        pass
+
+    
 
 
 def extract_angles(points: torch.Tensor) -> Tuple[float, float, float, float]:
@@ -31,11 +78,11 @@ def extract_angles(points: torch.Tensor) -> Tuple[float, float, float, float]:
     l_angle_hip = utils.three_points_angle(l_knee,l_hip,l_shoulder)
     r_angle_hip = utils.three_points_angle(r_knee,r_hip,r_shoulder)
 
-    mid_ankle = (int((l_ankle[0] + r_ankle[0]) // 2), int((l_ankle[1] + r_ankle[1]) // 2))
+    
     mid_hip = (int((l_hip[0] + r_hip[0]) // 2), int((l_hip[1] + r_hip[1]) // 2))
     mid_shoulder = (int((l_shoulder[0] + r_shoulder[0]) // 2), int((l_shoulder[1] + r_shoulder[1]) // 2))
 
-    back_vector = ((mid_hip[0] - mid_ankle[0]), (mid_hip[1] - mid_ankle[1]))
+    back_vector = (1, 0)
     ground_vector = ((mid_shoulder[0] - mid_hip[0]), (mid_shoulder[1] - mid_hip[1]))
     back_ground_angle = utils.two_vector_angle(back_vector, ground_vector)
 
@@ -74,17 +121,16 @@ def plot_angles(frame: np.array ,points: torch.Tensor) -> np.array:
     cv2.putText(frame, r_angle_hip_text, tuple(map(int, r_hip)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
 
     # back_ground_angle角度绘制
-    mid_ankle = (int((l_ankle[0] + r_ankle[0]) // 2), int((l_ankle[1] + r_ankle[1]) // 2))
     mid_hip = (int((l_hip[0] + r_hip[0]) // 2), int((l_hip[1] + r_hip[1]) // 2))
     mid_shoulder = (int((l_shoulder[0] + r_shoulder[0]) // 2), int((l_shoulder[1] + r_shoulder[1]) // 2))
 
     back_ground_angle_place = ((mid_shoulder[0] + mid_hip[0]) // 2, (mid_shoulder[1] + mid_hip[1]) // 2)
 
-    back_vector = ((mid_hip[0] - mid_ankle[0]), (mid_hip[1] - mid_ankle[1]))
+    back_vector = (1, 0)
     ground_vector = ((mid_shoulder[0] - mid_hip[0]), (mid_shoulder[1] - mid_hip[1]))
     back_ground_angle = utils.two_vector_angle(back_vector, ground_vector)
 
-    cv2.line(frame, mid_ankle, mid_hip, (255, 200, 100), thickness = 2)
+    
     cv2.line(frame, mid_hip, mid_shoulder, (255, 200, 100), thickness = 2)
     cv2.putText(frame, f"{back_ground_angle:.2f}", back_ground_angle_place, cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
 
@@ -105,6 +151,8 @@ def point_error(points: torch.Tensor) -> Tuple[float, float, float]:
     dist_hip = utils.euclidean_distance(l_hip, r_hip)
 
     return (dist_ankle, dist_knee, dist_hip)
+
+
 
 def side_video2csv(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
     """

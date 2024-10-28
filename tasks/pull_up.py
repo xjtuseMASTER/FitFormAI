@@ -19,7 +19,7 @@ class PullUpInfo(TypedDict):
     high_leftElbow : Tuple[float, float]
     high_rightElbow : Tuple[float, float]
     high_leftWrist : Tuple[float, float]
-    high_rightWrist : Tuple[float, float]
+    _rightWrist : Tuple[float, float]
     wristDistance : float # 手腕距离，正值
     shoulderDistance : float # 肩膀距离，正值
 

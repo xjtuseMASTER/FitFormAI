@@ -99,6 +99,14 @@ def video2video_base_(process_methods: Any, input_path: str, output_path: str, m
     out.release()
     cv2.destroyAllWindows()
 
+def euclidean_distance(point1, point2):
+    """计算欧几里得距离"""
+    
+    point1 = np.array(point1)
+    point2 = np.array(point2)
+    
+    distance = np.sqrt(np.sum((point1 - point2) ** 2))
+    return distance
 
 def three_points_angle(p1: Tuple[float,float], p2: Tuple[float,float], p3: Tuple[float,float]) -> float:
     """计算三个点之间的夹角，p2为中间折点
@@ -197,9 +205,9 @@ def processor_standard(input_path: str, output_path: str, model: YOLO, **keywarg
             'l_knee', 'r_knee', 'l_ankle', 'r_ankle'], index= list(range(1, frame_idx + 1)))
     df.to_csv(output_path, index_label='idx')
 
-model = YOLO(r"E:\深度学习算法学习\项目管理\FitFormAI\model\yolov8m-pose.pt")
-processor_standard(r"E:\深度学习算法学习\项目管理\FitFormAI\resource\引体向上\背部视角\标准\引体向上-背部-标准-03.mov",
-                   r"E:\深度学习算法学习\项目管理\FitFormAI\output", model)
+# model = YOLO(r"E:\深度学习算法学习\项目管理\FitFormAI\model\yolov8m-pose.pt")
+# processor_standard(r"E:\深度学习算法学习\项目管理\FitFormAI\resource\引体向上\背部视角\标准\引体向上-背部-标准-03.mov",
+#                    r"E:\深度学习算法学习\项目管理\FitFormAI\output", model)
 
 def preprocess_wave(wave):
     """
