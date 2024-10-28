@@ -1,5 +1,6 @@
 import csv
 from typing import TypedDict, List
+from matplotlib import pyplot as plt
 import numpy as np
 
 class WaveData(TypedDict):
@@ -42,6 +43,8 @@ class WaveData(TypedDict):
     windowSize4filterDeviation : int
     TimefilterDeviation : int
     windowSize4multiWindowsAverage : List[int]
+
+    mean_value : List[float]
 
 class DataFactory:
     """
@@ -107,14 +110,12 @@ class DataFactory:
         self._data_preprocess(self._waveData['originData'], wave_idx)
         for i in range(self._waveData['TimefilterDeviation']):
             self._waveData['filterData'][:, wave_idx] = self._filterDeviation(self._waveData['filterData'][:, wave_idx], wave_idx)
-        self.__plot(self._waveData['filterData'][:, wave_idx], label ="middleData")
-        self._waveData['filterData'][:, wave_idx] = self._filterDeviation(self._waveData['filterData'][:, wave_idx], wave_idx)
+        self._waveData['filterData'][:, wave_idx] = self._highAndLowFilterDeviation(self._waveData['filterData'][:, wave_idx], wave_idx)
         self._waveData['filterData'][:, wave_idx] = self._multiWindows_average(self._waveData['filterData'][:, wave_idx])
 
 
     def _data_preprocess(self, wave: np.array, wave_idx: int) -> None:
         """做波形的预处理，生成波形后续处理所需数据"""
-        # TODO 所有参数形状都需要初始化
         wave = wave[:, wave_idx]
         self._waveData['smoothData4Period'][:, wave_idx] = self._moving_average(wave, self._waveData['windowSize4meanPeriod'])
         self._waveData['smoothData4highPeriod'][:, wave_idx] = self._moving_average(wave, self._waveData['windowSize4highPeriod'])
@@ -125,7 +126,8 @@ class DataFactory:
         self._waveData['lowPeriod_timeStampSet'][wave_idx] = self._lowPeriod_timeStampSet(self._waveData['smoothData4lowPeriod'][:, wave_idx])
 
         self._waveData['smoothData'][:, wave_idx] = self._moving_average(wave, self._waveData['windowSize4filterDeviation'])
-        self._waveData['filterData'][:, wave_idx] = self._waveData['smoothData'][:, wave_idx].copy()
+        self._waveData['filterData'][:, wave_idx] = self._moving_average(wave, self._waveData['windowSize4filterDeviation'])
+        self._waveData['mean_value'][wave_idx] = np.mean(self._waveData['smoothData'][:, wave_idx])
 
     def _multiWindows_average(self, wave: np.array) -> np.array:
         """
@@ -141,6 +143,21 @@ class DataFactory:
         result /= len(waves)
         return result
 
+    def _highAndLowFilterDeviation(self, wave: np.array, wave_idx: int) -> np.array:
+        """整波根据高低分开处理"""
+        mean_value = self._waveData["mean_value"][wave_idx]
+        start_idx = 1
+        end_idx = -2
+        waveList = self._waveData['meanPeriod_timeStampSet'][wave_idx][start_idx:end_idx].tolist()
+        for start_frame in waveList:
+            end_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][waveList.index(start_frame) + 1 + start_idx]
+            middle_frame = int((start_frame + end_frame) / 2)
+            if(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] > mean_value):
+                wave[start_frame: end_frame] = self._getHighValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave[start_frame: end_frame])
+            elif(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] < mean_value):
+                wave[start_frame: end_frame] = self._getLowValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave[start_frame: end_frame])
+        return wave
+
     def _filterDeviation(self, wave: np.array, wave_idx: int) -> np.array:
         # TODO 边值处理
         """
@@ -148,17 +165,16 @@ class DataFactory:
         使用较小窗口滤波和两个波形每个frame取大值的方式滤去大偏差
         注意：为了保证frame的一致性，全部以子波段的形式向下传入，这里的每个参数都有其意义，并且这里的wave已经是numpy的[:, idx]了
         """
-        mean_idx = self._waveData['meanPeriod_timeStampSet'][wave_idx][1]
-        mean_value = wave[mean_idx]
+        mean_value = self._waveData["mean_value"][wave_idx]
         start_idx = 1
         end_idx = -2
         waveList = self._waveData['meanPeriod_timeStampSet'][wave_idx][start_idx:end_idx].tolist()
         for start_frame in waveList:
-            end_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][waveList.index(start_frame) + 1]
-            if start_frame == end_frame : continue
-            if(self._waveData['smoothData4Period'][:, wave_idx][start_frame + 1] > mean_value):
+            end_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][waveList.index(start_frame) + 1 + start_idx]
+            middle_frame = int((start_frame + end_frame) / 2)
+            if(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] > mean_value):
                 wave[start_frame: end_frame] = self._highFilterDeviation(wave[start_frame: end_frame], wave_idx, start_frame, end_frame)
-            else:
+            elif(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] < mean_value):
                 wave[start_frame: end_frame] = self._lowFilterDeviation(wave[start_frame: end_frame], wave_idx, start_frame, end_frame)
         return wave
 
@@ -258,6 +274,7 @@ class DataFactory:
         self._waveData['meanPeriod_timeStampSet'] = [np.array([]) for _ in range(num_waves)]
         self._waveData['highPeriod_timeStampSet'] = [np.array([]) for _ in range(num_waves)]
         self._waveData['lowPeriod_timeStampSet'] = [np.array([]) for _ in range(num_waves)]
+        self._waveData['mean_value'] = [0 for _ in range(num_waves)]
 
     def setwindowSize4meanPeriod(self, windowSize4meanPeriod : int):
         self._waveData['windowSize4meanPeriod'] = windowSize4meanPeriod
@@ -286,7 +303,11 @@ class DataFactory:
         """绘制原始数据波和滤波后的数据"""
         import matplotlib.pyplot as plt
         wave_idx = self._getWaveNumpyIndex(waveName)
+        for idx in self._waveData['meanPeriod_timeStampSet'][wave_idx]:
+            plt.axvline(x=idx, color='r', linestyle='--', label='Mean Smooth Index' if idx == self._waveData['meanPeriod_timeStampSet'][wave_idx][0] else "")
         plt.plot(self._waveData['originData'][:, wave_idx], label="originData")
+        plt.plot(self._waveData['smoothData'][:, wave_idx], label="smoothData")
+        plt.plot(self._waveData['smoothData4Period'][:, wave_idx], label="smoothData4Period")
         plt.plot(self._waveData['filterData'][:, wave_idx], label="filterData")
         plt.title('Waveform')
         plt.xlabel('Time')
@@ -307,19 +328,9 @@ class DataFactory:
         import matplotlib.pyplot as plt
         plt.plot(wave, label=label)
 
-
-import unittest
-class testDataFactory(unittest.TestCase):
-    """
-    input： csv
-    output： 绘制曲线图，需要包含原始波形，最后生成的波形
-    """
-    def setUp(self):
-        # 创建一个临时的 CSV 文件用于测试
-        self.test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐(1).csv"
-        self.dataFactory = DataFactory(self.test_csv_data)
-
 test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐(1).csv"
+name = "l_angle_hip"
+# name = "back_ground_angle"
 dataFactory = DataFactory(test_csv_data)
-dataFactory.processSingleData("l_angle_hip")
-dataFactory.plotWave("l_angle_hip")
+dataFactory.processSingleData(name)
+dataFactory.plotWave(name)
