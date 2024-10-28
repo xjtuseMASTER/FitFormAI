@@ -7,7 +7,7 @@ def csv_to_numpy_l_angle_hip(csv_file):
     with open(csv_file, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            l_angle_hip_values.append(float(row['r_angle_hip']))
+            l_angle_hip_values.append(float(row['l_angle_hip']))
     return np.array(l_angle_hip_values)
 
 def moving_average(data, window_size):
@@ -25,6 +25,11 @@ def multi_windows(data, windows):
     return result
 
 def p_1(wave1: np.array, wave2: np.array) -> np.array:
+    result_wave = np.copy(wave2)
+    result_wave[wave2 < wave1] = wave1[wave2 < wave1]
+    return result_wave
+
+def _getHighValueInTwoWaves(self, wave1: np.array, wave2: np.array) -> np.array:
     result_wave = np.copy(wave2)
     result_wave[wave2 < wave1] = wave1[wave2 < wave1]
     return result_wave
@@ -58,7 +63,7 @@ if __name__ == "__main__":
     print(a)
     # smoothed_data = multi_windows(smoothed_data, [30, 20])
     p2_data = smoothed_data
-    for i in range(5):
+    for i in range(1):
         p_data = p_1(numpy_data, p2_data)
         p2_data = moving_average(p_data, window_size)
 
