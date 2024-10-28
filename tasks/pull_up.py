@@ -30,6 +30,18 @@ class PullUpInfo(TypedDict):
     low_wrist_elbow_shoulder_angle : float # 正值, 最低点
     high_wrist_elbow_shoulder_angle : float # 正值, 最高点
 
+    left_ankle = Tuple[float, float] # 脚踝坐标
+    left_knee = Tuple[float, float] # 膝盖坐标
+    right_ankle = Tuple[float, float] # 脚踝坐标
+    right_knee = Tuple[float, float] # 膝盖坐标
+
+    nose_shoulder_vertical_angle = float # 鼻子和肩膀的垂直角度，前伸正，后仰负
+
+    kneeRange : float # 膝盖极差，需要左右极差平均值, 正值
+    ankleRange : float # 脚踝极差，需要左右极差平均值, 正值
+
+    shoulder_hipBone_y_distance : float # 肩膀和髋骨的y轴距离，正值
+    wrist_shoulder_y_distance : float # 手腕和肩膀的y轴距离，正值
 
 class PullUp:
     def __init__(self, info: PullUpInfo) -> None:
@@ -92,24 +104,65 @@ class PullUp:
 
         if self.info['low_wrist_elbow_shoulder_angle'] < threshold:
             return "正确"
-        else:
+        elif self.info['low_wrist_elbow_shoulder_angle'] > threshold:
             return "自由落体肩胛骨松懈"
+        else:
+            return "wrong info"
 
-    # TODO: 实现腿部弯曲角度过大判别
-    def Leg_bending_angle():
-        pass
+    def Leg_bending_angle(self) -> str:
+        '''腿部弯曲角度过大判别'''
+        if self.info['left_knee'][1] > self.info['left_ankle'][1] and self.info['right_knee'][1] > self.info['right_ankle'][1]:
+            return "正确"
+        elif self.info['left_knee'][1] < self.info['left_ankle'][1] or self.info['right_knee'][1] < self.info['right_ankle'][1]:
+            return "膝盖弯曲角度过大"
+        else :
+            return "wrong info"
 
-    # TODO： 实现动作幅度判别
-    def action_amplitude():
-        pass
+    def action_amplitude(self) -> str:
+        '''实现动作幅度判别'''
+        # TODO 临时阈值
+        large_alpha = 30
+        small_alpha = 10
 
-    # TODO: 实现颈部错误判别
-    def neck_error():
-        pass
+        if (self.info['wrist_shoulder_y_distance'] < large_alpha * self.info['shoulder_hipBone_y_distance']
+            and self.info['wrist_shoulder_y_distance'] > small_alpha * self.info['shoulder_hipBone_y_distance']):
+            return "正确"
+        elif self.info['wrist_shoulder_y_distance'] > large_alpha * self.info['shoulder_hipBone_y_distance']:
+            return "动作幅度过大"
+        elif self.info['wrist_shoulder_y_distance'] < small_alpha * self.info['shoulder_hipBone_y_distance']:
+            return "动作幅度过小"
+        else:
+            return "wrong info"
 
-    # TODO：实现腿部摇晃判别
-    def leg_shake():
-        pass
+    def neck_error(self) -> str:
+        '''实现颈部错误判别'''
+        # TODO 临时阈值
+        tuck_threshold = 20
+        back_threshold = -5
+
+        if self.info['nose_shoulder_vertical_angle'] > back_threshold and self.info['nose_shoulder_vertical_angle'] < tuck_threshold:
+            return "正确"
+        elif self.info['nose_shoulder_vertical_angle'] < back_threshold:
+            return "颈部后仰"
+        elif self.info['nose_shoulder_vertical_angle'] > tuck_threshold:
+            return "颈部前伸"
+        else:
+            return "wrong info"
+
+    def leg_shake(self) -> str:
+        '''实现腿部摇晃判别'''
+        # TODO 临时阈值
+        knee_threshold = 10
+        ankle_threshold = 10
+
+        if self.info['kneeRange'] < knee_threshold and self.info['ankleRange'] < ankle_threshold:
+            return "正确"
+        elif self.info['kneeRange'] > knee_threshold:
+            return "膝盖摇晃"
+        elif self.info['ankleRange'] > ankle_threshold:
+            return "脚踝摇晃"
+        else:
+            return "wrong info"
 
     def core_not_tighten(self) -> str:
         '''实现核心不稳定判别'''
@@ -117,8 +170,10 @@ class PullUp:
         threshold = 5
         if self.info['hipBoneRange'] < threshold:
             return "正确"
-        else:
+        elif self.info['hipBoneRange'] > threshold:
             return "核心未收紧"
+        else:
+            return "wrong info"
 
 
 

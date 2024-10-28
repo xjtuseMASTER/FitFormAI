@@ -1,0 +1,7 @@
+{
+    "python.analysis.extraPaths": [
+        "./tasks",
+        "./tasks/DataFactory.py",
+        "./"
+    ]
+}
