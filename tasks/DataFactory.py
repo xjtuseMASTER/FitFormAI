@@ -105,7 +105,6 @@ class DataFactory:
         """
         对波形数据进行滤波处理。
         数据准备 -> 偏差过滤 -> 多次小窗口平均（特征恢复）
-        TODO 做np索引处理
         """
         self._data_preprocess(self._waveData['originData'], wave_idx)
         for i in range(self._waveData['TimefilterDeviation']):
@@ -159,7 +158,6 @@ class DataFactory:
         return wave
 
     def _filterDeviation(self, wave: np.array, wave_idx: int) -> np.array:
-        # TODO 边值处理
         """
         滤去偏差，返回较为平滑的曲线
         使用较小窗口滤波和两个波形每个frame取大值的方式滤去大偏差
@@ -176,6 +174,7 @@ class DataFactory:
                 wave[start_frame: end_frame] = self._highFilterDeviation(wave[start_frame: end_frame], wave_idx, start_frame, end_frame)
             elif(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] < mean_value):
                 wave[start_frame: end_frame] = self._lowFilterDeviation(wave[start_frame: end_frame], wave_idx, start_frame, end_frame)
+        wave = self._moving_average(wave, self._waveData['windowSize4filterDeviation'])
         return wave
 
     def _highFilterDeviation(self, wave : np.array, wave_idx: int, start_frame: int, end_frame: int) -> np.array:
@@ -183,8 +182,7 @@ class DataFactory:
         大于mean的数据滤去偏差
         注意：这里处理的是子波段
         """
-        intermediate_data = self._getHighValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave)
-        wave = self._moving_average(intermediate_data, self._waveData['windowSize4filterDeviation'])
+        wave = self._getHighValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave)
         return wave
 
     def _lowFilterDeviation(self, wave : np.array, wave_idx: int, start_frame: int, end_frame: int) -> np.array:
@@ -192,8 +190,7 @@ class DataFactory:
         小于mean的数据滤去偏差
         注意：这里处理的是子波段
         """
-        intermediate_data = self._getLowValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave)
-        wave = self._moving_average(intermediate_data, self._waveData['windowSize4filterDeviation'])
+        wave = self._getLowValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave)
         return wave
 
     def _moving_average(self, data: np.array, window_size : int) -> np.array:
@@ -328,9 +325,9 @@ class DataFactory:
         import matplotlib.pyplot as plt
         plt.plot(wave, label=label)
 
-# test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐(1).csv"
-# name = "l_angle_hip"
-# # name = "back_ground_angle"
-# dataFactory = DataFactory(test_csv_data)
-# dataFactory.processSingleData(name)
-# dataFactory.plotWave(name)
+test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐(1).csv"
+name = "l_angle_hip"
+name = "back_ground_angle"
+dataFactory = DataFactory(test_csv_data)
+dataFactory.processSingleData(name)
+dataFactory.plotWave(name)
