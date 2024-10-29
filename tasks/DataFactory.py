@@ -304,7 +304,6 @@ class DataFactory:
         for idx in self._waveData['meanPeriod_timeStampSet'][wave_idx]:
             plt.axvline(x=idx, color='r', linestyle='--', label='Mean Smooth Index' if idx == self._waveData['meanPeriod_timeStampSet'][wave_idx][0] else "")
         plt.plot(self._waveData['originData'][:, wave_idx], label="originData")
-        plt.plot(self._waveData['smoothData'][:, wave_idx], label="smoothData")
         plt.plot(self._waveData['smoothData4Period'][:, wave_idx], label="smoothData4Period")
         plt.plot(self._waveData['filterData'][:, wave_idx], label="filterData")
         plt.title('Waveform')
@@ -328,9 +327,10 @@ class DataFactory:
 
 """
 use-case
-test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐(1).csv"
+test_csv_data = r"path_to_your_csv_file"
 name = "l_angle_hip"
 name = "back_ground_angle"
+# 不要对非周期波形处理，否则会报错
 dataFactory = DataFactory(test_csv_data)
 dataFactory.processSingleData(name)
 dataFactory.plotWave(name)
