@@ -6,9 +6,10 @@ import numpy as np
 class WaveData(TypedDict):
     """
     包含原始csv文件，以及所有中间处理数据
+    波形数据的shape为(wave_length, wave_nums)
     originCSV : csv file
     originData : np.ndarray 转换后的原始波形numpy shape:(wave_length, wave_idx)
-    dataNameList : list[int, str] 维度索引和name
+    dataNameList : list[str]
     smoothData : np.ndarray 平滑后的波形（小窗口）
     smoothData4Period : np.ndarray 为提取周期信息平滑的波形（大窗口）
     filterData : np.ndarray 滤波后的波形
@@ -49,11 +50,14 @@ class WaveData(TypedDict):
 
 class DataFactory:
     """
+    默认参数均是对于周期波形的处理，对于非周期波形的处理，建议调整参数。
     只提供processData方法，其他方法均为私有方法，不对外提供。
     可以选择处理单个波形或者全部处理。
     可以使用继承的方式，实现不同的数据处理方法。
 
     提供不同传入值的处理方法，可以向内传入waveData，也可以获取waveData。
+
+    注意：周期波形处理时，第一个周期默认为非周期波形，不参与处理。请不要使用索引0获取第一个周期的信息。
     """
     def __init__(self, originCSV: str):
         """
@@ -142,12 +146,24 @@ class DataFactory:
             result += wave
         result /= len(waves)
         return result
+    
+    def _filterDeviation(self, wave: np.array, wave_idx: int) -> np.array:
+        """
+        滤去较大偏差，返回较为平滑的曲线
+        使用较小窗口滤波和两个波形每个frame取大值的方式滤去大偏差
+        """
+        self._highAndLowFilterDeviation(wave, wave_idx)
+        wave = self._moving_average(wave, self._waveData['windowSize4filterDeviation'])
+        return wave
 
     def _highAndLowFilterDeviation(self, wave: np.array, wave_idx: int) -> np.array:
-        """整波根据高低分开处理"""
+        """
+        整波根据高低分开处理
+        注意：为了保证frame的一致性，全部以子波段的形式向下传入，这里的每个参数都有其意义，并且这里的wave已经是numpy的[:, idx]了
+        """
         mean_value = self._waveData["mean_value"][wave_idx]
-        start_idx = 1
-        end_idx = -2
+        start_idx = 1 # 去掉第一个subwave
+        end_idx = -1 # 调成-1 或者 -2，选择是否去掉最后一个subwave
         waveList = self._waveData['meanPeriod_timeStampSet'][wave_idx][start_idx:end_idx].tolist()
         for start_frame in waveList:
             end_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][waveList.index(start_frame) + 1 + start_idx]
@@ -158,53 +174,23 @@ class DataFactory:
                 wave[start_frame: end_frame] = self._getLowValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave[start_frame: end_frame])
         return wave
 
-    def _filterDeviation(self, wave: np.array, wave_idx: int) -> np.array:
-        """
-        滤去偏差，返回较为平滑的曲线
-        使用较小窗口滤波和两个波形每个frame取大值的方式滤去大偏差
-        注意：为了保证frame的一致性，全部以子波段的形式向下传入，这里的每个参数都有其意义，并且这里的wave已经是numpy的[:, idx]了
-        """
-        mean_value = self._waveData["mean_value"][wave_idx]
-        start_idx = 1
-        end_idx = -2
-        waveList = self._waveData['meanPeriod_timeStampSet'][wave_idx][start_idx:end_idx].tolist()
-        for start_frame in waveList:
-            end_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][waveList.index(start_frame) + 1 + start_idx]
-            middle_frame = int((start_frame + end_frame) / 2)
-            if(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] > mean_value):
-                wave[start_frame: end_frame] = self._highFilterDeviation(wave[start_frame: end_frame], wave_idx, start_frame, end_frame)
-            elif(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] < mean_value):
-                wave[start_frame: end_frame] = self._lowFilterDeviation(wave[start_frame: end_frame], wave_idx, start_frame, end_frame)
-        wave = self._moving_average(wave, self._waveData['windowSize4filterDeviation'])
-        return wave
-
-    def _highFilterDeviation(self, wave : np.array, wave_idx: int, start_frame: int, end_frame: int) -> np.array:
-        """
-        大于mean的数据滤去偏差
-        注意：这里处理的是子波段
-        """
-        wave = self._getHighValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave)
-        return wave
-
-    def _lowFilterDeviation(self, wave : np.array, wave_idx: int, start_frame: int, end_frame: int) -> np.array:
-        """
-        小于mean的数据滤去偏差
-        注意：这里处理的是子波段
-        """
-        wave = self._getLowValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave)
-        return wave
-
     def _moving_average(self, data: np.array, window_size : int) -> np.array:
         """滑动窗口"""
         window = np.ones(int(window_size)) / float(window_size)
         return np.convolve(data, window, 'same')
     
     def _getHighValueInTwoWaves(self, wave1: np.array, wave2: np.array) -> np.array:
+        """
+        取两个波段中较高的值
+        """
         result_wave = np.copy(wave2)
         result_wave[wave2 < wave1] = wave1[wave2 < wave1]
         return result_wave
     
     def _getLowValueInTwoWaves(self, wave1: np.array, wave2: np.array) -> np.array:
+        """
+        取两个波段中较低的值
+        """
         result_wave = np.copy(wave2)
         result_wave[wave2 > wave1] = wave1[wave2 > wave1]
         return result_wave
@@ -330,7 +316,6 @@ use-case
 test_csv_data = r"path_to_your_csv_file"
 name = "l_angle_hip"
 name = "back_ground_angle"
-# 不要对非周期波形处理，否则会报错
 dataFactory = DataFactory(test_csv_data)
 dataFactory.processSingleData(name)
 dataFactory.plotWave(name)
