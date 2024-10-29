@@ -21,6 +21,7 @@ class WaveData(TypedDict):
     windowSize4filterDeviation : int
     TimefilterDeviation : int  filterDeviation的次数，建议赋值5
     windowSize4multiWindowsAverage : list[int] 第二次多窗口的值，建议赋值[20, 10, 5, 5, 5]
+    mean_value : List[float] windowSize4meanPeriod的均值
     """
 
     originCSV : str
@@ -325,9 +326,12 @@ class DataFactory:
         import matplotlib.pyplot as plt
         plt.plot(wave, label=label)
 
+"""
+use-case
 test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐(1).csv"
 name = "l_angle_hip"
 name = "back_ground_angle"
 dataFactory = DataFactory(test_csv_data)
 dataFactory.processSingleData(name)
 dataFactory.plotWave(name)
+"""
