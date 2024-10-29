@@ -104,6 +104,7 @@ class DataFactory:
         """
         wave_idx = self._getWaveNumpyIndex(waveName)
         self._filterData(wave_idx)
+        self._computeHighAndLowValueMean(wave_idx)
         return self._waveData['filterData'][:, wave_idx]
     
     def _filterData(self, wave_idx: int) -> None:
@@ -162,7 +163,7 @@ class DataFactory:
         注意：为了保证frame的一致性，全部以子波段的形式向下传入，这里的每个参数都有其意义，并且这里的wave已经是numpy的[:, idx]了
         """
         mean_value = self._waveData["mean_value"][wave_idx]
-        start_idx = 1 # 去掉第一个subwave
+        start_idx = 0
         end_idx = -1 # 调成-1 或者 -2，选择是否去掉最后一个subwave
         waveList = self._waveData['meanPeriod_timeStampSet'][wave_idx][start_idx:end_idx].tolist()
         for start_frame in waveList:
@@ -173,11 +174,17 @@ class DataFactory:
             elif(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] < mean_value):
                 wave[start_frame: end_frame] = self._getLowValueInTwoWaves(self._waveData['originData'][:, wave_idx][start_frame: end_frame], wave[start_frame: end_frame])
         return wave
-
-    def _moving_average(self, data: np.array, window_size : int) -> np.array:
-        """滑动窗口"""
-        window = np.ones(int(window_size)) / float(window_size)
-        return np.convolve(data, window, 'same')
+    
+    def _moving_average(self, data: np.array, window_size: int) -> np.array:
+        """滑动窗口，进行窗口起始和结束位置调整"""
+        left_offset = window_size // 2
+        right_offset = window_size - left_offset - 1
+        left_pad_value = data[0]
+        right_pad_value = data[-1]
+        adjusted_data = np.pad(data, (left_offset, right_offset), 'constant', constant_values=(left_pad_value, right_pad_value))
+        window = np.ones(int(window_size))/float(window_size)
+        result = np.convolve(adjusted_data, window, 'same')
+        return result[left_offset:-right_offset]
     
     def _getHighValueInTwoWaves(self, wave1: np.array, wave2: np.array) -> np.array:
         """
@@ -213,7 +220,7 @@ class DataFactory:
     def _highPeriod_timeStampSet(self, wave: np.array) -> np.array:
         """
         大窗口滑动的波形用，建议值80-100
-        在高平均这几个值中，一定一定要提前去除非周期波形，否则获取会有问题
+        在高平均这几个值中，一定一定要提前去除非周期波形，否则获取会有问题，我保留了所有波形，在调用时去掉第一个值，第一个值可能有问题
         """
         peaks = (np.diff(np.sign(np.diff(wave))) < 0).nonzero()[0] + 1
         return peaks
@@ -260,6 +267,23 @@ class DataFactory:
         self._waveData['lowPeriod_timeStampSet'] = [np.array([]) for _ in range(num_waves)]
         self._waveData['mean_value'] = [0 for _ in range(num_waves)]
 
+    def _computeHighAndLowValueMean(self, wave_idx: int) -> tuple[float, float]:
+        """计算高平均值和低平均值"""
+        self._highPeriod_timeStampSet(self._waveData['filterData'][:, wave_idx])
+        self._lowPeriod_timeStampSet(self._waveData['filterData'][:, wave_idx])
+        highValueStamp = self._waveData['highPeriod_timeStampSet'][wave_idx]
+        lowValueStamp = self._waveData['lowPeriod_timeStampSet'][wave_idx]
+        return self._computeHighOrLowValueMean(wave_idx, highValueStamp), self._computeHighOrLowValueMean(wave_idx, lowValueStamp)
+
+    def _computeHighOrLowValueMean(self, wave_idx: int, timeStampSet: np.array) -> float:
+        """计算高平均值"""
+        wave = self._waveData['filterData'][:, wave_idx]
+        sum = 0
+        len = timeStampSet.shape[0]
+        for timeStamps in timeStampSet:
+            sum += wave[timeStamps]
+        return sum / len
+
     def setwindowSize4meanPeriod(self, windowSize4meanPeriod : int):
         self._waveData['windowSize4meanPeriod'] = windowSize4meanPeriod
 
@@ -282,13 +306,36 @@ class DataFactory:
         """更改csv文件"""
         self._waveData['originCSV'] = originCSV
         self._setOriginData()
+
+    def getHighPeriod_timeStampSet(self) -> np.array:
+        """获取极大值集合,第一个值慎用"""
+        return self._waveData['highPeriod_timeStampSet']
+    
+    def getLowPeriod_timeStampSet(self) -> np.array:
+        """获取极小值集合，,第一个值慎用"""
+        return self._waveData['lowPeriod_timeStampSet']
+
+    def getHighValueMean(self, waveName: str) -> float:
+        """获取高平均值"""
+        return self._computeHighValueMean(waveName)
+
+    def getLowValueMean(self, waveName: str) -> float:
+        """获取低平均值"""
+        return self._computeLowValueMean(waveName)
         
     def plotWave(self, waveName : str):
         """绘制原始数据波和滤波后的数据"""
         import matplotlib.pyplot as plt
         wave_idx = self._getWaveNumpyIndex(waveName)
+        highValueMean, lowValueMean = self._computeHighAndLowValueMean(wave_idx)
+        plt.axhline(y=highValueMean, color='g', linestyle='--', label='High Value Mean')
+        plt.axhline(y=lowValueMean, color='y', linestyle='--', label='Low Value Mean')
+        for idx in self._waveData['highPeriod_timeStampSet'][wave_idx]:
+            plt.axvline(x=idx, color='r', linestyle='--', label='High Index' if idx == self._waveData['highPeriod_timeStampSet'][wave_idx][0] else "")
+        for idx in self._waveData['lowPeriod_timeStampSet'][wave_idx]:
+            plt.axvline(x=idx, color='b', linestyle='--', label='Low Index' if idx == self._waveData['lowPeriod_timeStampSet'][wave_idx][0] else "")
         for idx in self._waveData['meanPeriod_timeStampSet'][wave_idx]:
-            plt.axvline(x=idx, color='r', linestyle='--', label='Mean Smooth Index' if idx == self._waveData['meanPeriod_timeStampSet'][wave_idx][0] else "")
+            plt.axvline(x=idx, color='g', linestyle='--', label='Mean Index' if idx == self._waveData['meanPeriod_timeStampSet'][wave_idx][0] else "")
         plt.plot(self._waveData['originData'][:, wave_idx], label="originData")
         plt.plot(self._waveData['smoothData4Period'][:, wave_idx], label="smoothData4Period")
         plt.plot(self._waveData['filterData'][:, wave_idx], label="filterData")
@@ -320,3 +367,10 @@ dataFactory = DataFactory(test_csv_data)
 dataFactory.processSingleData(name)
 dataFactory.plotWave(name)
 """
+
+test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐(1).csv"
+name = "l_angle_hip"
+# name = "back_ground_angle"
+dataFactory = DataFactory(test_csv_data)
+dataFactory.processSingleData(name)
+dataFactory.plotWave(name)
