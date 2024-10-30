@@ -126,9 +126,9 @@ class DataFactory:
         self._waveData['smoothData4highPeriod'][:, wave_idx] = self._moving_average(wave, self._waveData['windowSize4highPeriod'])
         self._waveData['smoothData4lowPeriod'][:, wave_idx] = self._moving_average(wave, self._waveData['windowSize4lowPeriod'])
 
-        self._waveData['meanPeriod_timeStampSet'][wave_idx] = self._meanPeriod_timeStampSet(self._waveData['smoothData4Period'][:, wave_idx])
-        self._waveData['highPeriod_timeStampSet'][wave_idx] = self._highPeriod_timeStampSet(self._waveData['smoothData4highPeriod'][:, wave_idx])
-        self._waveData['lowPeriod_timeStampSet'][wave_idx] = self._lowPeriod_timeStampSet(self._waveData['smoothData4lowPeriod'][:, wave_idx])
+        self._waveData['meanPeriod_timeStampSet'][wave_idx] = self._meanPeriod_timeStampSet(self._waveData['smoothData4Period'][:, wave_idx], wave_idx)
+        self._waveData['highPeriod_timeStampSet'][wave_idx] = self._highPeriod_timeStampSet(self._waveData['smoothData4highPeriod'][:, wave_idx], wave_idx)
+        self._waveData['lowPeriod_timeStampSet'][wave_idx] = self._lowPeriod_timeStampSet(self._waveData['smoothData4lowPeriod'][:, wave_idx], wave_idx)
 
         self._waveData['smoothData'][:, wave_idx] = self._moving_average(wave, self._waveData['windowSize4filterDeviation'])
         self._waveData['filterData'][:, wave_idx] = self._moving_average(wave, self._waveData['windowSize4filterDeviation'])
@@ -211,27 +211,43 @@ class DataFactory:
         wave[endTimeStamp:] = wave[endTimeStamp]
         return wave
     
-    def _meanPeriod_timeStampSet(self, wave: np.array) -> np.array:
+    def _meanPeriod_timeStampSet(self, wave: np.array, wave_idx: int) -> np.array:
         """中等窗口滑动的波形用，建议值30"""
         mean_value = np.mean(wave)
+        self._waveData['mean_value'][wave_idx] = mean_value
         cross_points = np.where(np.diff(np.sign(wave - mean_value)))[0]
         return cross_points
 
-    def _highPeriod_timeStampSet(self, wave: np.array) -> np.array:
+    def _highPeriod_timeStampSet(self, wave: np.array, wave_idx: int) -> np.array:
         """
         大窗口滑动的波形用，建议值80-100
         在高平均这几个值中，一定一定要提前去除非周期波形，否则获取会有问题，我保留了所有波形，在调用时去掉第一个值，第一个值可能有问题
         """
-        peaks = (np.diff(np.sign(np.diff(wave))) < 0).nonzero()[0] + 1
-        return peaks
-    
-    def _lowPeriod_timeStampSet(self, wave: np.array) -> np.array:
+        peaks = []
+        for idx in range(len(self._waveData['meanPeriod_timeStampSet'][wave_idx]) - 1):
+            mean_value = self._waveData['mean_value'][wave_idx]
+            start_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][idx]
+            end_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][idx + 1]
+            middle_frame = int((start_frame + end_frame) / 2)
+            a = self._waveData['smoothData4Period'][:, wave_idx][middle_frame]
+            if(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] > mean_value):
+                peaks.append(middle_frame)
+        return np.array(peaks)
+
+    def _lowPeriod_timeStampSet(self, wave: np.array, wave_idx: int) -> np.array:
         """
         大窗口滑动的波形用，建议值80-100
-        在低平均这几个值中，一定一定要提前去除非周期波形，否则获取会有问题
+        在高平均这几个值中，一定一定要提前去除非周期波形，否则获取会有问题，我保留了所有波形，在调用时去掉第一个值，第一个值可能有问题
         """
-        troughs = (np.diff(np.sign(np.diff(wave))) > 0).nonzero()[0] + 1
-        return troughs
+        troughs = []
+        for idx in range(len(self._waveData['meanPeriod_timeStampSet'][wave_idx]) - 1):
+            mean_value = self._waveData['mean_value'][wave_idx]
+            start_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][idx]
+            end_frame = self._waveData['meanPeriod_timeStampSet'][wave_idx][idx + 1]
+            middle_frame = int((start_frame + end_frame) / 2)
+            if(self._waveData['smoothData4Period'][:, wave_idx][middle_frame] < mean_value):
+                troughs.append(middle_frame)
+        return np.array(troughs)
 
     def _setOriginData(self):
         with open(self._waveData['originCSV'], 'r') as f:
@@ -269,8 +285,8 @@ class DataFactory:
 
     def _computeHighAndLowValueMean(self, wave_idx: int) -> tuple[float, float]:
         """计算高平均值和低平均值"""
-        self._highPeriod_timeStampSet(self._waveData['filterData'][:, wave_idx])
-        self._lowPeriod_timeStampSet(self._waveData['filterData'][:, wave_idx])
+        self._waveData['highPeriod_timeStampSet'][wave_idx] = self._highPeriod_timeStampSet(self._waveData['filterData'][:, wave_idx], wave_idx)
+        self._waveData['lowPeriod_timeStampSet'][wave_idx] = self._lowPeriod_timeStampSet(self._waveData['filterData'][:, wave_idx], wave_idx)
         highValueStamp = self._waveData['highPeriod_timeStampSet'][wave_idx]
         lowValueStamp = self._waveData['lowPeriod_timeStampSet'][wave_idx]
         return self._computeHighOrLowValueMean(wave_idx, highValueStamp), self._computeHighOrLowValueMean(wave_idx, lowValueStamp)
@@ -367,3 +383,10 @@ dataFactory = DataFactory(test_csv_data)
 dataFactory.processSingleData(name)
 dataFactory.plotWave(name)
 """
+
+test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐.csv"
+name = "l_angle_hip"
+# name = "back_ground_angle"
+dataFactory = DataFactory(test_csv_data)
+dataFactory.processSingleData(name)
+dataFactory.plotWave(name)
