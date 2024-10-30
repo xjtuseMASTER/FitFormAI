@@ -1,24 +1,23 @@
-from typing import Tuple, List, Dict
 import cv2
 import pandas as pd
 from ultralytics import YOLO
 import utils
 import torch
-from typing import TypedDict, Union
+from typing import TypedDict, Union, Tuple, List
 import numpy as np
 from keypoints import Keypoints
+from task_base import TaskBase, InfoBase
 
-def SetUpInfo(TypedDict):
-    raw_data: pd.DataFrame
+class SetUpInfo(InfoBase):
     peak_angle_hip: float
     trough_angle_hip: float
     peak_back_ground_angle: float
     trough_back_ground_angle: float
     mean_angle_knee: float
 
-
-class SetUp:
+class SetUp(TaskBase):
     def __init__(self, model: YOLO) -> None:
+        super().__init__()
         self.error_list = ["unreasonable_leg_folding_angle", "shoulder_not_touch_with_cushion",  "elbows_not_touch_thighs", "waist_bounce"]
         self.model = model
 
@@ -26,25 +25,29 @@ class SetUp:
         """对外暴露的接口函数"""
         yolo_outputs = self.model(source=input_path, stream=True)
         info = self._feature_extractor(yolo_outputs)
-        error_include = self._judge_error(info)
-        frame_idxs = self._frame_idx_extractor(error_include, info)
+        error_list = self._judge_error(info)
+        frame_idxs = self._frame_idx_extractor(error_list, info)
+        frames = self._find_out_frames(input_path, frame_idxs)
+        plot_frames = self._plot_the_frames(info, error_list, frame_idxs, frames)
 
 
     def _feature_extractor(self, yolo_outputs: list) -> SetUpInfo:
         """获取分析判断前所需要的所有特征信息"""
         frame_idx = 0
         data = []
+        raw_keypoints = []
         for r in yolo_outputs:
             keypoints = utils.extract_main_person(r)
             # processing
             angles, labels = extract_angles(keypoints)
             data.append(angles)
+            raw_keypoints.append(keypoints)
 
             #TODO: 优化数据
 
             frame_idx += 1
             
-        df = pd.DataFrame(data, columns=labels, index=list(range(1, len(data) + 1)))
+        raw_data = pd.DataFrame(data, columns=labels, index=list(range(1, len(data) + 1)))
 
          #TODO: 得到全局特征值
         # peak_angle_hip = 144.1
@@ -60,7 +63,8 @@ class SetUp:
         trough_back_ground_angle = 7.92
 
         setup_info: SetUpInfo = {
-            "raw_data": df,
+            'raw_keypoints': raw_keypoints,
+            "raw_data": raw_data,
             "peak_angle_hip": peak_angle_hip,
             "trough_angle_hip": trough_angle_hip,
             "peak_back_ground_angle": peak_back_ground_angle,
@@ -69,32 +73,7 @@ class SetUp:
         }
         return setup_info
 
-    def _judge_error(self, info: SetUpInfo) -> List[str]:
-        """根据特征数据实现判别逻辑"""
-        error_included = []
-        for error in self.error_list:
-            method_name = '_' + error
-            method = getattr(self, method_name, None)
-            if callable(method):
-                result = method(info)
-                if result: 
-                    error_included.append(error)
-        
-        return error_included
 
-
-    def _frame_idx_extractor(self, error_include: List[str], info: SetUpInfo) -> List[int]:
-        #TODO: 得到佐证视频帧索引  
-        frame_idxs = []
-        for error in error_include:
-            method_name = '_frame_' + error
-            method = getattr(self, method_name, None)
-            if callable(method):
-                result = method(info)
-                frame_idxs.append(result)
-
-        return frame_idxs
-    
         
     def _unreasonable_leg_folding_angle(self, info: SetUpInfo) -> bool:
         """判断折腿角度是否合理"""
@@ -112,12 +91,33 @@ class SetUp:
         raw_data = info["raw_data"]
         mean_angle_hip = raw_data["mean_angle_hip"]
 
+        idx = find_closest_index(mean_angle_hip, trough_angle_hip)
+        return idx
+    
+    def _plot_unreasonable_leg_folding_angle(self, info: SetUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        """对能折腿角度不合理的视频帧进行绘制"""
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        ankle = keypoints.get_int("ankle")
+        knee = keypoints.get_int("knee")
+        hip = keypoints.get_int("hip")
+        angle = utils.three_points_angle(ankle, knee, hip)
+
+        cv2.line(frame, ankle, knee, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, knee, hip, color=(255, 0, 0), thickness=2)
+        cv2.putText(frame, str(int(angle)), knee, cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
+
+        for point in  [ankle, knee, hip]:
+            cv2.circle(frame, point, radius=5, color=(0, 255, 0), thickness=-1)
+
+        frame_filename = f"frame_with_text.jpg"
+        cv2.imwrite(frame_filename, frame)
+
+        return frame
 
 
 
 
-
-        
     def _shoulder_not_touch_with_cushion(self, info: SetUpInfo) -> bool:
         """判断肩胛骨是否触垫"""
         trough_threshold = 5
@@ -126,6 +126,16 @@ class SetUp:
         else:
             return False
         
+    def _frame_shoulder_not_touch_with_cushion(self, info: SetUpInfo) -> int:
+        """获取能佐证肩胛骨未触垫的视频帧"""
+        trough_back_ground_angle = info["trough_back_ground_angle"]
+        raw_data = info["raw_data"]
+        back_ground_angle = raw_data["back_ground_angle"]
+
+        idx = find_closest_index(back_ground_angle, trough_back_ground_angle)
+        return idx
+
+        
     def _elbows_not_touch_thighs(self, info: SetUpInfo) -> bool:
         """判断双肘是否触及大腿"""
         trough_threshold = 70
@@ -133,11 +143,38 @@ class SetUp:
             return True
         else:
             return False
+        
+    
+    def _frame_elbows_not_touch_thighs(self, info: SetUpInfo) -> int:
+        """获取能双肘未触及大腿的视频帧"""
+        trough_angle_hip = info["trough_angle_hip"]
+        raw_data = info["raw_data"]
+        mean_angle_hip = raw_data["mean_angle_hip"]
+
+        idx = find_closest_index(mean_angle_hip, trough_angle_hip)
+        return idx
+
 
     def _waist_bounce(self, info: SetUpInfo)-> bool:
         """判断是否存在腰部弹震借力的情况"""
         pass
 
+
+
+
+    
+
+def find_closest_index(sequence, constant):
+        closest_index = -1
+        min_diff = float('inf')
+
+        for index, number in enumerate(sequence):
+            diff = abs(number - constant)
+            if diff < min_diff:
+                min_diff = diff
+                closest_index = index
+
+        return closest_index
     
 
 def extract_angles(points: torch.Tensor):
