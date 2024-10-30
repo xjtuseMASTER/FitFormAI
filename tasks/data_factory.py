@@ -383,10 +383,3 @@ dataFactory = DataFactory(test_csv_data)
 dataFactory.processSingleData(name)
 dataFactory.plotWave(name)
 """
-
-test_csv_data = r"E:\算法\项目管理\FitFormAI\仰卧起坐-侧面视角-单侧发力起坐.csv"
-name = "l_angle_hip"
-# name = "back_ground_angle"
-dataFactory = DataFactory(test_csv_data)
-dataFactory.processSingleData(name)
-dataFactory.plotWave(name)
