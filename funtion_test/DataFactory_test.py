@@ -1,7 +1,7 @@
 import numpy as np
 import csv
 import unittest
-from ..tasks import DataFactory as DF
+from ..tasks import data_factory as DF
 
 class TestDataFactory(unittest.TestCase, DF.DataFactory):
     def setUp(self):
