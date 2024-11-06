@@ -3,18 +3,91 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 
-class ProcessedWaveData(TypedDict):
+class ProcessedData(TypedDict):
     raw_data: pd.DataFrame
     mean: float
     peak: float
     trough: float
+    indices_of_peaks: List[int]
+    indices_of_troughs: List[int]
 
-class DataProcessor:
+class DateProcessor:
     def __init__(self, raw_data: pd.DataFrame):
         self.raw_data = raw_data
         self.filter_iterations = 3
 
-    def process_wave_data(self, label: str) -> ProcessedWaveData:
+    def process_unwave_data(self, label: str) -> ProcessedData:
+        """
+        处理原始波形数据，通过移动平均滤波器进行平滑，并提取接近均值的点，
+        同时将数据进行可视化。
+
+        该方法执行以下步骤：
+        1. 获取与给定 `label` 对应的原始数据。
+        2. 多次应用移动平均滤波器（次数由 `filter_iterations` 参数指定）。
+        3. 在每次滤波后提取接近原始数据均值的点。
+        4. 对数据进行最终的移动平均滤波，以平滑数据。
+        5. 绘制原始数据和滤波后的数据图表，并标注均值线。
+
+        Args:
+            label (str): 对应 `self.raw_data` 中数据列的标签，该列将被处理。
+
+        Returns:
+            ProcessedData: 包含处理后数据的字典，字典包括：
+                - "raw_data"：处理后的数据。
+                - "mean"：数据的均值。
+        """
+
+        raw_data = self.raw_data[label].values
+
+        #滤波
+        temp_data = raw_data
+        for _ in range(self.filter_iterations):
+            filtered_data = self._apply_moving_average(temp_data, 30)
+            mean_value = np.mean(temp_data)
+            temp_data = self._extract_points_near_to_mean(temp_data, filtered_data, mean_value)
+        filtered_wave = self._apply_moving_average(raw_data, 10)
+        mean_value = np.mean(filtered_wave)
+
+        processed_wave_data:ProcessedData = {
+            "raw_data": raw_data,
+            "mean": mean_value,
+        }
+
+        return processed_wave_data
+
+    def process_unwave_data_with_plot(self, label: str) -> ProcessedData:
+        """带绘图方法的process_unwave_data函数"""
+
+        plt.title("process_unwave_data")
+        plt.xlabel("idx")
+        plt.ylabel(label)
+
+        raw_data = self.raw_data[label].values
+        plt.plot(raw_data, color='#845EC2', label='raw_data', )
+
+        #滤波
+        temp_data = raw_data
+        for _ in range(self.filter_iterations):
+            filtered_data = self._apply_moving_average(temp_data, 30)
+            mean_value = np.mean(temp_data)
+            temp_data = self._extract_points_near_to_mean(temp_data, filtered_data, mean_value)
+        filtered_wave = self._apply_moving_average(temp_data, 10)
+        mean_value = np.mean(filtered_wave)
+
+        plt.plot(filtered_wave, color='r', label='filtered_data', )
+        plt.axhline(mean_value, color = 'y', label = 'mean')
+        plt.legend()
+        plt.show()
+
+        processed_wave_data:ProcessedData = {
+            "raw_data": raw_data,
+            "mean": mean_value,
+        }
+
+        return processed_wave_data
+
+
+    def process_wave_data(self, label: str) -> ProcessedData:
         """
         处理给定标签的波形数据并返回相关统计信息。
 
@@ -41,11 +114,12 @@ class DataProcessor:
         raw_wave = self.raw_data[label].values
 
         #滤波
+        temp_wave = raw_wave
         for i in range(self.filter_iterations):
-            filtered_wave = self._apply_moving_average(raw_wave, 30)
-            mean_value = np.mean(raw_wave)
-            raw_wave = self._extract_points_far_from_mean(raw_wave, filtered_wave, mean_value)
-        filtered_wave = self._apply_moving_average(raw_wave, 10)
+            filtered_wave = self._apply_moving_average(temp_wave, 30)
+            mean_value = np.mean(filtered_wave)
+            temp_wave = self._extract_points_far_from_mean(temp_wave, filtered_wave, mean_value)
+        filtered_wave = self._apply_moving_average(temp_wave, 10)
 
         #获取波峰与波谷
         approximate_peaks, approximate_troughs = self._get_approximate_location_of_peak_and_trough(filtered_wave)
@@ -56,50 +130,39 @@ class DataProcessor:
         peaks_indices = self._select_nearest_values(approximate_peaks, potential_peaks)
         troughs_indices = self._select_nearest_values(approximate_troughs, potential_troughs)
 
-        peak_avg = self._calculate_average_at_indices(raw_wave, peaks_indices)
-        trough_avg = self._calculate_average_at_indices(raw_wave, troughs_indices)
+        peak_avg = self._calculate_average_at_indices(filtered_wave, peaks_indices)
+        trough_avg = self._calculate_average_at_indices(filtered_wave, troughs_indices)
 
         #返回波形统计结果
-        processed_wave_data:ProcessedWaveData = {
+        processed_wave_data:ProcessedData = {
             "raw_data": raw_wave,
             "mean": mean_value,
             "peak": peak_avg,
-            "trough": trough_avg
+            "trough": trough_avg,
+            "indices_of_peaks": peaks_indices,
+            "indices_of_troughs": troughs_indices
         }
 
         return processed_wave_data
 
 
-    def process_wave_data_with_plot(self, label: str) -> ProcessedWaveData:
-        """
-        处理给定标签的波形数据并绘制相关图形。
-
-        该方法首先从原始数据中提取指定标签的波形数据，然后进行滤波处理。滤波过程中应用了移动平均方法，以去除噪声并平滑波形。接着，计算波形的平均值、峰值和谷值，并返回包含原始数据、平均值、峰值和谷值的字典。
-
-        Args:
-            label (str): 要处理的波形数据的标签名称，应该对应于原始数据中的列名。
-
-        Returns:
-            ProcessedWaveData: 一个包含以下字段的字典：
-                - raw_data (pd.DataFrame): 处理后的原始波形数据。
-                - mean (float): 原始波形数据的平均值。
-                - peak (float): 处理后波形数据的平均峰值。
-                - trough (float): 处理后波形数据的平均谷值。
-        """
+    def process_wave_data_with_plot(self, label: str) -> ProcessedData:
+        """带绘图方法的process_wave_data函数"""
 
         plt.title("process_wave_data")
         plt.xlabel("idx")
-        plt.ylabel("wave")
+        plt.ylabel(label)
 
         raw_wave = self.raw_data[label].values
         plt.plot(raw_wave, color='#845EC2', label='raw_wave', )
 
         #滤波
+        temp_wave = raw_wave
         for i in range(self.filter_iterations):
-            filtered_wave = self._apply_moving_average(raw_wave, 30)
-            mean_value = np.mean(raw_wave)
-            raw_wave = self._extract_points_far_from_mean(raw_wave, filtered_wave, mean_value)
-        filtered_wave = self._apply_moving_average(raw_wave, 10)
+            filtered_wave = self._apply_moving_average(temp_wave, 30)
+            mean_value = np.mean(filtered_wave)
+            temp_wave = self._extract_points_far_from_mean(temp_wave, filtered_wave, mean_value)
+        filtered_wave = self._apply_moving_average(temp_wave, 10)
 
         #获取波峰与波谷
         approximate_peaks, approximate_troughs = self._get_approximate_location_of_peak_and_trough(filtered_wave)
@@ -110,8 +173,8 @@ class DataProcessor:
         peaks_indices = self._select_nearest_values(approximate_peaks, potential_peaks)
         troughs_indices = self._select_nearest_values(approximate_troughs, potential_troughs)
 
-        peak_avg = self._calculate_average_at_indices(raw_wave, peaks_indices)
-        trough_avg = self._calculate_average_at_indices(raw_wave, troughs_indices)
+        peak_avg = self._calculate_average_at_indices(filtered_wave, peaks_indices)
+        trough_avg = self._calculate_average_at_indices(filtered_wave, troughs_indices)
 
         #绘图
         plt.axhline(y=peak_avg, color='g', linestyle='--', label='peak_avg')
@@ -140,13 +203,15 @@ class DataProcessor:
         plt.savefig('tset.png')
 
         #返回波形统计结果
-        processed_wave_data:ProcessedWaveData = {
+        processed_wave_data:ProcessedData = {
             "raw_data": raw_wave,
             "mean": mean_value,
             "peak": peak_avg,
-            "trough": trough_avg
+            "trough": trough_avg,
+            "indices_of_peaks": peaks_indices,
+            "indices_of_troughs": troughs_indices
         }
-        
+
         return processed_wave_data
 
 
@@ -268,6 +333,24 @@ class DataProcessor:
 
         new_wave = np.where(distance_wave1 > distance_wave2, wave1, wave2)
         return new_wave
+    
+    def _extract_points_near_to_mean(self, wave1: np.array, wave2: np.array, mean_value: float) -> np.array:
+        """
+        从两个波形中选择距离给定 mean_value 值较远的点。
+
+        Args:
+            wave1 (np.array): 第一个波形的数据。
+            wave2 (np.array): 第二个波形的数据。
+            mean_value (float): 用于比较的 mean_value 值。
+
+        Returns:
+            np.array: 新波形，包含距离 mean_value 值较远的点。
+        """
+        distance_wave1 = np.abs(wave1 - mean_value)
+        distance_wave2 = np.abs(wave2 - mean_value)
+
+        new_wave = np.where(distance_wave1 < distance_wave2, wave1, wave2)
+        return new_wave
 
 
     def _select_nearest_values(self, y_approximate: np.array, y_potential: np.array) -> np.array:
@@ -323,8 +406,10 @@ class DataProcessor:
 
 #use case
 csv_path = 'output/仰卧起坐/侧面视角/单侧发力起坐/仰卧起坐-侧面视角-单侧发力起坐(1).csv'
-label= 'l_angle_hip'
+label= 'l_angle_knee'
 raw_csv = pd.read_csv(csv_path)
 
-data_processor = DataProcessor(raw_csv)
-data_processor.process_wave_data_with_plot(label)
+data_processor = DateProcessor(raw_csv)
+data_processor.process_unwave_data(label)
+
+

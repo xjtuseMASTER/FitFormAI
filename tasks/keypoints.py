@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from typing import Tuple, List, TypedDict
 
@@ -45,8 +46,16 @@ class Keypoints:
         return tuple(point[:2].tolist())
     
     def _get_middle_point(self, pointA: tuple, pointB: tuple) -> tuple:
-        return ((pointA[0] + pointB[0]) / 2, (pointA[1] + pointB[1]) / 2)
-
+        pointA = np.array(pointA)
+        pointB = np.array(pointB)
+        
+        if np.all(pointA == 0):
+            return tuple(pointB)
+        if np.all(pointB == 0):
+            return tuple(pointA)
+        
+        return tuple((pointA + pointB) / 2)
+    
     class Keypoint(TypedDict):
         part: str
         location: Tuple[float, float]

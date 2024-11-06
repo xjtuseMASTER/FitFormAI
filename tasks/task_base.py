@@ -3,23 +3,43 @@ import numpy as np
 import pandas as pd
 import cv2
 
+from advices import load_advice_by_filename
 import utils
 
 class InfoBase(TypedDict):
     raw_keypoints: any
     raw_data: pd.DataFrame
 
+class ErrorDetail(TypedDict):
+    error: str
+    advice: str
+    frame: np.array
+
 class TaskBase:
+    def __init__(self):
+        self.task = "task"
+    
     def do_analysis(self, input_path: str):
         """对外暴露的接口函数"""
+        results: List[ErrorDetail] = []
         yolo_outputs = self.model(source=input_path, stream=True)
         info = self._feature_extractor(yolo_outputs)
-        error_included = self._judge_error(info)
-        frame_idxs = self._frame_idx_extractor(error_included, info)
+        error_list = self._judge_error(info)
+        frame_idxs = self._frame_idx_extractor(error_list, info)
         frames = self._find_out_frames(input_path, frame_idxs)
-        plot_frames = self._plot_the_frames(info, error_included, frame_idxs, frames)
+        plot_frames = self._plot_the_frames(info, error_list, frame_idxs, frames)
 
-
+        advices = load_advice_by_filename(self.task + ".json")
+        for i, error in enumerate(error_list):
+            error_detail: ErrorDetail = {
+                "error": advices[error]["error"],
+                "advice": advices[error]["advice"],
+                "frame": plot_frames[i]
+            }
+            results.append(error_detail)
+        
+        return results
+    
     def _feature_extractor(self, yolo_outputs: list) -> InfoBase:
         """获取分析判断前所需要的所有特征信息"""
         raise NotImplementedError("子类必须重写 _feature_extractor 方法。")

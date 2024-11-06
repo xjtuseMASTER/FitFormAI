@@ -52,4 +52,5 @@ def process_by_view(src_view_dir: str) -> None:
 
 
 setup = SetUp(setup_model())
-setup.do_analysis("resource/仰卧起坐/侧面视角/双肘未触及大腿/仰卧起坐-侧面视角-双肘未触及大腿.MOV")
+results = setup.do_analysis("resource/仰卧起坐/侧面视角/腰部弹震借力/仰卧起坐-侧面视角-腰部弹震借力(2).MOV")
+print(results)
