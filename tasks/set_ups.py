@@ -1,12 +1,17 @@
 import cv2
+import random
 import pandas as pd
 from ultralytics import YOLO
 import utils
 import torch
-from typing import TypedDict, Union, Tuple, List
+from advices import load_advice_by_filename
+from typing import Tuple, List
 import numpy as np
 from keypoints import Keypoints
-from task_base import TaskBase, InfoBase
+from task_base import TaskBase, InfoBase, ErrorDetail
+from data_processor import DateProcessor
+
+PLOT = False
 
 class SetUpInfo(InfoBase):
     peak_angle_hip: float
@@ -14,15 +19,23 @@ class SetUpInfo(InfoBase):
     peak_back_ground_angle: float
     trough_back_ground_angle: float
     mean_angle_knee: float
+    angle_hip_indices_of_peaks: List[int]
+    angle_hip_indices_of_troughs: List[int]
+    back_ground_angle_indices_of_peaks: List[int]
+    back_ground_angle_indices_of_troughs: List[int]
+
 
 class SetUp(TaskBase):
     def __init__(self, model: YOLO) -> None:
         super().__init__()
-        self.error_list = ["unreasonable_leg_folding_angle", "shoulder_not_touch_with_cushion",  "elbows_not_touch_thighs", "waist_bounce"]
+        self.task = "set_ups"
+        self.error_list = ["unreasonable_leg_folding_angle", "shoulder_not_touch_with_cushion", 'elbows_not_touch_thighs', "waist_bounce", "hold_head_with_hands"]
         self.model = model
 
     def do_analysis(self, input_path: str):
         """对外暴露的接口函数"""
+
+        results: List[ErrorDetail] = []
         yolo_outputs = self.model(source=input_path, stream=True)
         info = self._feature_extractor(yolo_outputs)
         error_list = self._judge_error(info)
@@ -30,6 +43,17 @@ class SetUp(TaskBase):
         frames = self._find_out_frames(input_path, frame_idxs)
         plot_frames = self._plot_the_frames(info, error_list, frame_idxs, frames)
 
+        advices = load_advice_by_filename(self.task + ".json")
+        for i, error in enumerate(error_list):
+            error_detail: ErrorDetail = {
+                "error": advices[error]["error"],
+                "advice": advices[error]["advice"],
+                "frame": plot_frames[i]
+            }
+            results.append(error_detail)
+        
+        return results
+        
 
     def _feature_extractor(self, yolo_outputs: list) -> SetUpInfo:
         """获取分析判断前所需要的所有特征信息"""
@@ -43,24 +67,24 @@ class SetUp(TaskBase):
             data.append(angles)
             raw_keypoints.append(keypoints)
 
-            #TODO: 优化数据
-
             frame_idx += 1
             
         raw_data = pd.DataFrame(data, columns=labels, index=list(range(1, len(data) + 1)))
+        data_processor = DateProcessor(raw_data)
 
-         #TODO: 得到全局特征值
-        # peak_angle_hip = 144.1
-        # trough_angle_hip = 46.55
-        # mean_angle_knee = 73.2
-        # peak_back_ground_angle = 85.01
-        # trough_back_ground_angle = 0.0
-
-        peak_angle_hip = 144.1
-        trough_angle_hip = 71.55
-        mean_angle_knee = 101.4
-        peak_back_ground_angle = 85.01
-        trough_back_ground_angle = 7.92
+        #获取peak_angle_hip,trough_angle_hip
+        processed_l_angle_hip = data_processor.process_wave_data("l_angle_hip")
+        processed_r_angle_hip = data_processor.process_wave_data("r_angle_hip")
+        peak_angle_hip = (processed_l_angle_hip["peak"] + processed_r_angle_hip["peak"])/2
+        trough_angle_hip = (processed_l_angle_hip["trough"] + processed_r_angle_hip["trough"])/2
+        #获取mean_angle_knee
+        processed_l_angle_knee = data_processor.process_unwave_data('l_angle_knee')
+        processed_r_angle_knee = data_processor.process_unwave_data('r_angle_knee')
+        mean_angle_knee = (processed_l_angle_knee["mean"] + processed_r_angle_knee["mean"])/2
+        #获取peak_back_ground_angle与trough_back_ground_angle
+        processed_back_ground_angle = data_processor.process_wave_data("back_ground_angle")
+        peak_back_ground_angle = processed_back_ground_angle["peak"]
+        trough_back_ground_angle = processed_back_ground_angle["trough"]
 
         setup_info: SetUpInfo = {
             'raw_keypoints': raw_keypoints,
@@ -70,8 +94,13 @@ class SetUp(TaskBase):
             "peak_back_ground_angle": peak_back_ground_angle,
             "trough_back_ground_angle": trough_back_ground_angle,
             "mean_angle_knee": mean_angle_knee,
+            "angle_hip_indices_of_peaks": processed_l_angle_hip["indices_of_peaks"],
+            "angle_hip_indices_of_troughs": processed_l_angle_hip["indices_of_troughs"],
+            "back_ground_angle_indices_of_peaks": processed_back_ground_angle["indices_of_peaks"],
+            "back_ground_angle_indices_of_troughs": processed_back_ground_angle["indices_of_troughs"]
         }
         return setup_info
+
 
 
         
@@ -87,12 +116,7 @@ class SetUp(TaskBase):
         
     def _frame_unreasonable_leg_folding_angle(self, info: SetUpInfo) -> int:
         """获取能佐证折腿角度不合理的视频帧"""
-        trough_angle_hip = info["trough_angle_hip"]
-        raw_data = info["raw_data"]
-        mean_angle_hip = raw_data["mean_angle_hip"]
-
-        idx = find_closest_index(mean_angle_hip, trough_angle_hip)
-        return idx
+        return random.choice(info["angle_hip_indices_of_troughs"])
     
     def _plot_unreasonable_leg_folding_angle(self, info: SetUpInfo, frame_idx: int, frame: np.array) -> np.array:
         """对能折腿角度不合理的视频帧进行绘制"""
@@ -110,8 +134,9 @@ class SetUp(TaskBase):
         for point in  [ankle, knee, hip]:
             cv2.circle(frame, point, radius=5, color=(0, 255, 0), thickness=-1)
 
-        frame_filename = f"frame_with_text.jpg"
-        cv2.imwrite(frame_filename, frame)
+        if PLOT:
+            frame_filename = f"unreasonable_leg_folding_angle.jpg"
+            cv2.imwrite(frame_filename, frame)
 
         return frame
 
@@ -128,54 +153,155 @@ class SetUp(TaskBase):
         
     def _frame_shoulder_not_touch_with_cushion(self, info: SetUpInfo) -> int:
         """获取能佐证肩胛骨未触垫的视频帧"""
-        trough_back_ground_angle = info["trough_back_ground_angle"]
-        raw_data = info["raw_data"]
-        back_ground_angle = raw_data["back_ground_angle"]
+        return random.choice(info["back_ground_angle_indices_of_troughs"])
+    
+    def _plot_shoulder_not_touch_with_cushion(self, info: SetUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        """对能佐证肩胛骨未触垫的视频帧进行绘制"""
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        shoulder = keypoints.get_int("shoulder")
+        hip = keypoints.get_int("hip")
+        ground = (shoulder[0], hip[1])
+        angle = utils.three_points_angle(shoulder,hip,ground)
 
-        idx = find_closest_index(back_ground_angle, trough_back_ground_angle)
-        return idx
+        cv2.line(frame, hip, shoulder, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, hip, ground, color=(255, 0, 0), thickness=2)
+        cv2.putText(frame, str(int(angle)), hip, cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
+
+        for point in  [hip, ground, shoulder]:
+            cv2.circle(frame, point, radius=5, color=(0, 255, 0), thickness=-1)
+
+        frame_filename = f"shoulder_not_touch_with_cushion.jpg"
+        cv2.imwrite(frame_filename, frame)
+
+        return frame
 
         
     def _elbows_not_touch_thighs(self, info: SetUpInfo) -> bool:
         """判断双肘是否触及大腿"""
         trough_threshold = 70
-        if info["trough_angle_hip"] >= 70:
+        if info["trough_angle_hip"] >= trough_threshold:
             return True
         else:
             return False
         
     
     def _frame_elbows_not_touch_thighs(self, info: SetUpInfo) -> int:
-        """获取能双肘未触及大腿的视频帧"""
-        trough_angle_hip = info["trough_angle_hip"]
-        raw_data = info["raw_data"]
-        mean_angle_hip = raw_data["mean_angle_hip"]
+        """获取能佐证双肘未触及大腿的视频帧"""
+        return random.choice(info["angle_hip_indices_of_troughs"])
+    
+    def _plot_elbows_not_touch_thighs(self, info: SetUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        """对能佐证双肘未触及大腿的视频帧进行绘制"""
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        shoulder = keypoints.get_int("shoulder")
+        hip = keypoints.get_int("hip")
+        knee = keypoints.get_int("knee")
+        elbow = keypoints.get_int("elbow")
+        droop_feet = utils.perpendicular_point_to_line(elbow, hip, knee)
+        elbow_line_start = utils.translate_point_by_vector(knee, droop_feet, elbow)
+        elbow_line_end = utils.translate_point_by_vector(hip, droop_feet, elbow)
 
-        idx = find_closest_index(mean_angle_hip, trough_angle_hip)
-        return idx
+        cv2.line(frame, hip, knee, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, droop_feet, elbow, color=(0, 255, 0), thickness=2)
+        cv2.line(frame, elbow_line_start, elbow_line_end, color=(255, 255, 0), thickness=2)
+
+        for point in  [hip, knee, elbow, droop_feet, elbow_line_start, elbow_line_end]:
+            cv2.circle(frame, point, radius=5, color=(0, 255, 0), thickness=-1)
+
+        if PLOT:
+            frame_filename = f"elbows_not_touch_thighs.jpg"
+            cv2.imwrite(frame_filename, frame)
+
+        return frame
 
 
     def _waist_bounce(self, info: SetUpInfo)-> bool:
         """判断是否存在腰部弹震借力的情况"""
-        pass
+        has_unreasonable_leg_folding_angle = self._unreasonable_leg_folding_angle(info)
+        if not has_unreasonable_leg_folding_angle:
+            trough_threshold = 155
+        else:
+            trough_threshold = 165
+        
+        if info["peak_angle_hip"] >= trough_threshold:
+            return True
+        else:
+            return False
+            
+    def _frame_waist_bounce(self, info: SetUpInfo) -> int:
+        """获取能佐证存在腰部弹震借力的视频帧"""
+        return random.choice(info["angle_hip_indices_of_peaks"])
+    
+    def _plot_waist_bounce(self, info: SetUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        """对能佐证存在腰部弹震借力的视频帧进行绘制"""
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        shoulder = keypoints.get_int("shoulder")
+        hip = keypoints.get_int("hip")
+        knee = keypoints.get_int("knee")
+        angle = utils.three_points_angle(shoulder, hip, knee)
+
+        cv2.line(frame, hip, knee, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, hip, shoulder, color=(255, 0, 0), thickness=2)
+        cv2.putText(frame, str(int(angle)), hip, cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(255, 255, 255), thickness=2)
 
 
+        for point in  [hip, knee, shoulder]:
+            cv2.circle(frame, point, radius=5, color=(0, 255, 0), thickness=-1)
 
+        if PLOT:
+            frame_filename = f"waist_bounce.jpg"
+            cv2.imwrite(frame_filename, frame)
 
+        return frame
+    
+    def _hold_head_with_hands(self, info: SetUpInfo)-> bool:
+        """判断是否存在双手扶头的情况"""
+        trough_threshold = 40
+
+        frame_idxs = info["angle_hip_indices_of_troughs"]
+        distanses = []
+        raw_keypoints = info["raw_keypoints"]
+        for frame_idx in frame_idxs:
+            keypoints = Keypoints(raw_keypoints[frame_idx])
+            eye = keypoints.get_int("eye")
+            wrist = keypoints.get_int("wrist")
+            distanse = utils.euclidean_distance(eye, wrist)
+            if not distanse == -1.0:
+                distanses.append(distanse)
+
+        if np.min(distanses) >= trough_threshold:
+            return True
+        else:
+            return False
+
+    def _frame_hold_head_with_hands(self, info: SetUpInfo) -> int:
+        """获取能佐证存在双手扶头的视频帧"""
+        return random.choice(info["angle_hip_indices_of_troughs"])
+    
+    def _plot_hold_head_with_hands(self, info: SetUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        """对能佐证存在双手扶头的视频帧进行绘制"""
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        wrist = keypoints.get_int("wrist")
+
+        overlay = frame.copy()
+        cv2.circle(overlay, wrist,radius=50, color=(0, 255, 0, 128), thickness=cv2.FILLED)
+        frame_with_circle = cv2.addWeighted(frame, 1, overlay, 0.5, 0)  
+
+        if PLOT:
+            frame_filename = f"hold_head_with_hands.jpg"
+            cv2.imwrite(frame_filename, frame_with_circle)
+
+        return frame_with_circle
     
 
-def find_closest_index(sequence, constant):
-        closest_index = -1
-        min_diff = float('inf')
+# # use-case(in main.py)
+# setup = SetUp(setup_model())
+# setup.do_analysis("your-vedio-path")
 
-        for index, number in enumerate(sequence):
-            diff = abs(number - constant)
-            if diff < min_diff:
-                min_diff = diff
-                closest_index = index
 
-        return closest_index
-    
 
 def extract_angles(points: torch.Tensor):
     """仰卧起坐动作必要角度信息提取,返回格式为包含四个角度的元组(l_angle_knee, r_angle_knee, l_angle_hip, r_angle_hip, back_ground_angle, mean_angle_knee, mean_angle_hip)"""

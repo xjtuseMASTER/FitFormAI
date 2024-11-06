@@ -101,6 +101,8 @@ def video2video_base_(process_methods: Any, input_path: str, output_path: str, m
 
 def euclidean_distance(point1, point2):
     """计算欧几里得距离"""
+    if np.array_equal(point1, (0, 0)) or np.array_equal(point2, (0, 0)):
+        return -1.0
     
     point1 = np.array(point1)
     point2 = np.array(point2)
@@ -108,7 +110,8 @@ def euclidean_distance(point1, point2):
     distance = np.sqrt(np.sum((point1 - point2) ** 2))
     return distance
 
-def three_points_angle(p1: Tuple[float,float], p2: Tuple[float,float], p3: Tuple[float,float]) -> float:
+
+def three_points_angle(p1: Tuple[float, float], p2: Tuple[float, float], p3: Tuple[float, float]) -> float:
     """计算三个点之间的夹角，p2为中间折点
 
     Args:
@@ -119,146 +122,101 @@ def three_points_angle(p1: Tuple[float,float], p2: Tuple[float,float], p3: Tuple
     Returns:
         float: 角度
     """
-    if p1 == (0,0) or p2 == (0,0) or p3 == (0,0):
+    if np.array_equal(p1, (0, 0)) or np.array_equal(p2, (0, 0)) or np.array_equal(p3, (0, 0)):
         return -1.0
     
-    x1, y1 = p1
-    x2, y2 = p2
-    x3, y3 = p3
+    p1, p2, p3 = np.array(p1), np.array(p2), np.array(p3)
+    vector_ab = p2 - p1
+    vector_bc = p2 - p3
     
-    vector_ab = (x2 - x1, y2 - y1)
-    vector_bc = (x2 - x3, y2 - y3)
-    
-    angle_degrees = two_vector_angle(vector_ab,vector_bc)
+    angle_degrees = two_vector_angle(vector_ab, vector_bc)
 
     return angle_degrees
 
-def two_vector_angle(v1: Tuple[float,float], v2: Tuple[float,float]) -> float:
+
+
+def two_vector_angle(v1: Tuple[float, float], v2: Tuple[float, float]) -> float:
     """计算两个向量之间的夹角
 
     Args:
-        v1 (Tuple[float,float]): 向量1
-        v2 (Tuple[float,float]): 向量2
+        v1 (Tuple[float, float]): 向量1
+        v2 (Tuple[float, float]): 向量2
 
     Returns:
-        float: 两向量夹角
+        float: 两向量夹角（单位：度）
     """
-    if v1 == (0,0) or v2 == (0,0):
+    if np.array_equal(v1, (0, 0)) or np.array_equal(v2, (0, 0)):
         return -1.0
-    
-    dot_product = v1[0] * v2[0] + v1[1] * v2[1]
-    
-    magnitude_ab = math.sqrt(v1[0]**2 + v1[1]**2)
-    magnitude_bc = math.sqrt(v2[0]**2 + v2[1]**2)
-    
-    cos_theta = dot_product / (magnitude_ab * magnitude_bc)
-    
-    angle = math.acos(cos_theta)
-    
-    angle_degrees = math.degrees(angle)
+
+    v1 = np.array(v1)
+    v2 = np.array(v2)
+
+    dot_product = np.dot(v1, v2)
+
+    magnitude_v1 = np.linalg.norm(v1)
+    magnitude_v2 = np.linalg.norm(v2)
+
+    cos_theta = dot_product / (magnitude_v1 * magnitude_v2)
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+
+    angle = np.arccos(cos_theta)
+    angle_degrees = np.degrees(angle)
 
     return angle_degrees
 
-def get_points(points: torch.Tensor) -> Tuple[float, float, float, float, float, float, float, float, float]:
-    if points.size(0) == 0: return (0, 0, 0, 0)
 
-    points = Keypoints(points)
 
-    l_knee = points.get("l_knee")
-    r_knee = points.get("r_knee")
-    l_ankle = points.get("l_ankle")
-    r_ankle = points.get("r_ankle")
-    l_wrist = points.get("l_wrist")
-    r_wrist = points.get("r_wrist")
-    l_elbow = points.get("l_elbow")
-    r_elbow = points.get("r_elbow")
-    l_shoulder = points.get("l_shoulder")
-    r_shoulder = points.get("r_shoulder")
-    l_hip = points.get("l_hip")
-    r_hip = points.get("r_hip")
-
-    return 
-
-def processor_standard(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
+def perpendicular_point_to_line(point, line_start, line_end):
     """
-    使用yolo处理**引体向上-背部视角-标准**视频,并将分析结果以csv的格式存入指定文件夹
+    计算给定点到由两点定义的直线的垂足。
+    
+    Args:
+        point (tuple): 给定的点 (x, y)
+        line_start (tuple): 直线的起始点 (x1, y1)
+        line_end (tuple): 直线的终止点 (x2, y2)
+    
+    Returns:
+        tuple: 垂足点 (px, py)
+    """
+    if np.array_equal(point, (0, 0)) or np.array_equal(line_start, (0, 0)) or np.array_equal(line_end, (0, 0)):
+        return -1.0
+    
+    P = np.array(point)
+    A = np.array(line_start)
+    B = np.array(line_end)
+    
+    AB = B - A
+    AP = P - A
+    
+    dot_product = np.dot(AP, AB)
+    AB_length_squared = np.dot(AB, AB)
+    t = dot_product / AB_length_squared
+    perpendicular_point = A + t * AB
+    
+    return tuple(perpendicular_point.astype(int))
+
+
+
+def translate_point_by_vector(point, start_point, end_point):
+    """
+    将给定点沿着从起点到终点的向量平移。
 
     Args:
-        input_path (str): 输入视频地址
-        output_path (str): 输出视频地址
-        model (YOLO): 所使用的YOLO模型
-    """
-    results = model(source=input_path, stream=True, **keywarg)  # generator of Results objects
-    frame_idx = 0
-    all_keypoints = []  # 用于存储所有帧的关键点
-    for r in results:
-        # processing
-        keypoints = extract_main_person(r)
-        all_keypoints.append(keypoints)  # 将每一帧的关键点添加到列表中    
-        frame_idx += 1
-
-    print(frame_idx)    
-    df = pd.DataFrame(all_keypoints, columns=[
-            'nose', 'l_eye', 'r_eye', 'l_ear', 'r_ear',
-            'l_shoulder', 'r_shoulder', 'l_elbow', 'r_elbow',
-            'l_wrist', 'r_wrist', 'l_hip', 'r_hip',
-            'l_knee', 'r_knee', 'l_ankle', 'r_ankle'], index= list(range(1, frame_idx + 1)))
-    df.to_csv(output_path, index_label='idx')
-
-# model = YOLO(r"E:\深度学习算法学习\项目管理\FitFormAI\model\yolov8m-pose.pt")
-# processor_standard(r"E:\深度学习算法学习\项目管理\FitFormAI\resource\引体向上\背部视角\标准\引体向上-背部-标准-03.mov",
-#                    r"E:\深度学习算法学习\项目管理\FitFormAI\output", model)
-
-def preprocess_wave(wave):
-    """
-    对波形进行预处理。
-
-    参数:
-    wave (np.ndarray): 输入的一维波形数据。
-
-    返回:
-    np.ndarray: 预处理后的波形数据。
-    """
-    wave = wave.to_numpy()
-    wave = wave / (np.max(np.abs(wave)) - np.min(np.abs(wave)))
-    return wave
-
-def find_peaks(wave):
-    """
-    找到波形中的峰值。
-
-    参数:
-    wave (np.ndarray): 输入的一维波形数据。
-
-    返回:
-    Tuple[np.ndarray, dict]: 峰值的索引数组和峰值属性的字典。
-    """
-    wave = wave.to_numpy()
-    peaks, properties = find_peaks(wave, height=0)
-    return peaks, properties
-
-def get_min_value(wave):
-    """
-    找到波形中的局部最小值。
-
-    参数:
-    wave (np.ndarray): 输入的一维波形数据。
-
-    返回:
-    Tuple[np.ndarray, dict]: 局部最小值的索引数组和属性的字典。
-    """
-    wave =  - wave.to_numpy()
-    peaks, properties= np.find_peaks(wave, height=0)
-    return peaks, properties
-
-
-def calculate_dtw(self, wave1, wave2):
-        """
-        计算两个波形之间的动态时间规整距离。
-        """
-        dtw_distance, _ = fastdtw(wave1, wave2, dist=euclidean)
-        return dtw_distance
+        point (tuple): 给定的点 (x, y)
+        start_point (tuple): 向量的起点坐标 (x1, y1)
+        end_point (tuple): 向量的终点坐标 (x2, y2)
     
-def calculate_distance(self, part1, part2):
-    distance = euclidean(part1, part2)
-    return distance
+    Returns:
+        tuple: 平移后的点 (px, py)
+    """
+    if np.array_equal(point, (0, 0)) or np.array_equal(start_point, (0, 0)) or np.array_equal(end_point, (0, 0)):
+        return -1
+    
+    P = np.array(point)
+    start = np.array(start_point)
+    end = np.array(end_point)
+    
+    vector = end - start
+    
+    translated_point = P + vector
+    return tuple(translated_point.astype(int))
