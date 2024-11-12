@@ -1,10 +1,10 @@
 import cv2
 import torch
-import utils
+from . import utils
 import numpy as np
 import pandas as pd
 from typing import Tuple, List, Any, TypedDict
-from keypoints import Keypoints
+from .keypoints import Keypoints
 from ultralytics import YOLO
 
 class PullUpInfo(TypedDict):

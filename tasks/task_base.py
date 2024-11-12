@@ -1,10 +1,10 @@
-from typing import List, TypedDict
+import cv2
 import numpy as np
 import pandas as pd
-import cv2
+from typing import List, TypedDict
 
-from advices import load_advice_by_filename
-import utils
+from . import utils
+from .advices import load_advice_by_filename
 
 class InfoBase(TypedDict):
     raw_keypoints: any

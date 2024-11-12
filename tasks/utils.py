@@ -1,17 +1,9 @@
-import math
 import cv2
 import torch
 import numpy as np
 from typing import Any, Tuple
-import pandas as pd
-from keypoints import Keypoints
 from ultralytics import YOLO
-from scipy.signal import find_peaks
-from scipy.spatial.distance import euclidean
-from fastdtw import fastdtw
-from ultralytics import YOLO
-
-from keypoints import Keypoints
+from .keypoints import Keypoints
 
 __all__ = ["extract_main_person", "show_keypoints", "video2video_base_", "three_points_angle"]
 

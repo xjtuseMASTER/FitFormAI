@@ -1,15 +1,15 @@
 import cv2
 import random
 import pandas as pd
-from ultralytics import YOLO
-import utils
 import torch
-from advices import load_advice_by_filename
-from typing import Tuple, List
 import numpy as np
-from keypoints import Keypoints
-from task_base import TaskBase, InfoBase, ErrorDetail
-from data_processor import DateProcessor
+from ultralytics import YOLO
+from typing import Tuple, List
+from . import utils
+from .advices import load_advice_by_filename
+from .keypoints import Keypoints
+from .task_base import TaskBase, InfoBase, ErrorDetail
+from .data_processor import DateProcessor
 
 PLOT = False
 

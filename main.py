@@ -1,34 +1,7 @@
 import os
-import sys
-from typing import List, Tuple
-
-from scipy.fft import fft, ifft
-
-sys.path.append("./tasks")
-from matplotlib import pyplot as plt
-import yaml
-from pathlib import Path
-from ultralytics import YOLO
-from tasks.task_processor import TaskProcessor
+from model.setup_model import setup_model
 from tasks.set_ups import SetUp
-import pandas as pd
-import numpy as np
-from scipy.optimize import curve_fit
-
-
-def setup_model() -> YOLO:
-    """根据配置文件初始化YOLO模型
-
-    Returns:
-        YOLO:完成初始化的YOLO模型
-    """
-    CONFIG_FILE = "config.yaml"
-    with open(CONFIG_FILE, "r") as f:
-        config = yaml.safe_load(f)
-    CHECKPOINTS = config["CHECKPOINTS"]
-    MODELNAME = config["MODELNAME"]
-    return YOLO(CHECKPOINTS + MODELNAME)
-
+from tasks.task_processor import TaskProcessor
 
 
 def process_by_view(src_view_dir: str) -> None:
@@ -45,6 +18,8 @@ def process_by_view(src_view_dir: str) -> None:
                 task_processor.process_video2csv(src_path)
 
 # process_by_view("resource/仰卧起坐/侧面视角")
+
+
 
 # src_file = "resource/仰卧起坐/侧面视角/肩胛骨未触垫/仰卧起坐-侧面视角-肩胛骨未触垫.MOV"
 # task_processor = TaskProcessor(setup_model())

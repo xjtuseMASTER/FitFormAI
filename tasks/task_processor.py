@@ -1,5 +1,5 @@
 import os
-import pull_up, set_ups
+from . import pull_up, set_ups
 from pathlib import Path
 from ultralytics import YOLO
 
