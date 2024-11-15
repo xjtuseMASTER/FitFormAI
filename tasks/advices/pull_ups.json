@@ -1,0 +1,34 @@
+{
+    "hands_hold_distance": {
+        "error": "握距不合适",
+        "advice": " "
+    },
+    "elbow": {
+        "error": "手肘内收",
+        "advice": " "
+    },
+    "Loose_shoulder_blades_in_freeFall": {
+        "error": "下落肩胛骨松懈",
+        "advice": " "
+    },
+    "Leg_bending_angle": {
+        "error": "双腿弯曲",
+        "advice": " "
+    },
+    "action_amplitude": {
+        "error": "动作幅度不合适",
+        "advice": " "
+    },
+    "neck_error": {
+        "error": "颈部前倾",
+        "advice": " "
+    },
+    "leg_shake": {
+        "error": "腿部摇晃",
+        "advice": " "
+    },
+    "core_not_tighten": {
+        "error": "核心未收紧",
+        "advice": " "
+    }
+}

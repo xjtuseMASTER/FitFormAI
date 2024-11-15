@@ -405,11 +405,11 @@ class DateProcessor:
     
 
 #use case
-csv_path = 'output/仰卧起坐/侧面视角/单侧发力起坐/仰卧起坐-侧面视角-单侧发力起坐(1).csv'
-label= 'l_angle_knee'
-raw_csv = pd.read_csv(csv_path)
+# csv_path = 'output/仰卧起坐/侧面视角/单侧发力起坐/仰卧起坐-侧面视角-单侧发力起坐(1).csv'
+# label= 'l_angle_knee'
+# raw_csv = pd.read_csv(csv_path)
 
-data_processor = DateProcessor(raw_csv)
-data_processor.process_unwave_data(label)
+# data_processor = DateProcessor(raw_csv)
+# data_processor.process_unwave_data(label)
 
 

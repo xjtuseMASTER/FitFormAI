@@ -1,13 +1,19 @@
 import cv2
-import torch
-import utils
-import numpy as np
+import random
 import pandas as pd
-from typing import Tuple, List, Any, TypedDict
-from keypoints import Keypoints
 from ultralytics import YOLO
+import utils
+import torch
+from advices import load_advice_by_filename
+from typing import Tuple, List
+import numpy as np
+from keypoints import Keypoints
+from task_base import TaskBase, InfoBase, ErrorDetail
+from data_processor import DateProcessor
 
-class PullUpInfo(TypedDict):
+PLOT = True
+
+class PullUpInfo(InfoBase):
     # TODO: 定义返回值类型
     """
     TODO
@@ -16,10 +22,6 @@ class PullUpInfo(TypedDict):
     leftWrist (Tuple[float, float]): 手腕坐标
     rightWrist (Tuple[float, float]): 手腕坐标
     """
-    high_leftElbow : Tuple[float, float]
-    high_rightElbow : Tuple[float, float]
-    high_leftWrist : Tuple[float, float]
-    _rightWrist : Tuple[float, float]
     wristDistance : float # 手腕距离，正值
     shoulderDistance : float # 肩膀距离，正值
 
@@ -30,10 +32,10 @@ class PullUpInfo(TypedDict):
     low_wrist_elbow_shoulder_angle : float # 正值, 最低点
     high_wrist_elbow_shoulder_angle : float # 正值, 最高点
 
-    left_ankle = Tuple[float, float] # 脚踝坐标
-    left_knee = Tuple[float, float] # 膝盖坐标
-    right_ankle = Tuple[float, float] # 脚踝坐标
-    right_knee = Tuple[float, float] # 膝盖坐标
+    left_ankle = (float, float) # 脚踝坐标
+    left_knee = (float, float) # 膝盖坐标
+    right_ankle = (float, float) # 脚踝坐标
+    right_knee = (float, float) # 膝盖坐标
 
     nose_shoulder_vertical_angle = float # 鼻子和肩膀的垂直角度，前伸正，后仰负
 
@@ -43,146 +45,391 @@ class PullUpInfo(TypedDict):
     shoulder_hipBone_y_distance : float # 肩膀和髋骨的y轴距离，正值
     wrist_shoulder_y_distance : float # 手腕和肩膀的y轴距离，正值
 
-class PullUp:
-    def __init__(self, info: PullUpInfo) -> None:
-        self.info = info
+class PullUp(TaskBase):
+    def __init__(self, model: YOLO) -> None:
+        super().__init__()
+        self.task = "pull_ups"
+        self.error_list = [
+            "hands_hold_distance", "elbow", "Loose_shoulder_blades_in_freeFall", "Leg_bending_angle", 
+            'action_amplitude', "neck_error", "leg_shake", "core_not_tighten"
+            ]
+        self.model = model
 
 
-    def pullUpDataProcess(self) -> PullUpInfo:
-        # 应该实现到顶层函数（调用所有判别的函数），这里写上方法，避免忘记
-        pass
+    def do_analysis(self, input_path: str):
+        """对外暴露的接口函数"""
 
-    # TODO: 实现全部错误点判别，数据分流，返回值整合
-    # 是否需要实现再议
-    def pull_up_distinguish():
-        pass
+        results: List[ErrorDetail] = []
+        yolo_outputs = self.model(source=input_path, stream=True)
+        info = self._feature_extractor(yolo_outputs)
+        error_list = self._judge_error(info)
+        frame_idxs = self._frame_idx_extractor(error_list, info)
+        frames = self._find_out_frames(input_path, frame_idxs)
+        plot_frames = self._plot_the_frames(info, error_list, frame_idxs, frames)
 
-    def hands_hold_distance(self) -> str:
+        advices = load_advice_by_filename(self.task + ".json")
+        for i, error in enumerate(error_list):
+            error_detail: ErrorDetail = {
+                "error": advices[error]["error"],
+                "advice": advices[error]["advice"],
+                "frame": plot_frames[i]
+            }
+            results.append(error_detail)
+        
+        return results
+        
+
+    def _feature_extractor(self, yolo_outputs: list) -> PullUpInfo:
+        """获取分析判断前所需要的所有特征信息"""
+        frame_idx = 0
+        data = []
+        raw_keypoints = []
+        for r in yolo_outputs:
+            keypoints = utils.extract_main_person(r)
+            # processing
+            points, labels = extract_points(keypoints)
+            data.append(points)
+            raw_keypoints.append(keypoints)
+
+            frame_idx += 1
+        raw_data = pd.DataFrame(data, columns=labels, index=list(range(1, len(data) + 1)))
+        data_processor = DateProcessor(raw_data)
+
+        # basic data processing
+        processed_l_ankle_x = data_processor.process_wave_data("l_ankle_x")
+        processed_l_ankle_y = data_processor.process_wave_data("l_ankle_y")
+        processed_l_knee_x = data_processor.process_wave_data("l_knee_x")
+        processed_l_knee_y = data_processor.process_wave_data("l_knee_y")
+        processed_r_ankle_x = data_processor.process_wave_data("r_ankle_x")
+        processed_r_ankle_y = data_processor.process_wave_data("r_ankle_y")
+        processed_r_knee_x = data_processor.process_wave_data("r_knee_x")
+        processed_r_knee_y = data_processor.process_wave_data("r_knee_y")
+        processed_l_shoulder_y = data_processor.process_wave_data("l_shoulder_y")
+        processed_r_shoulder_y = data_processor.process_wave_data("r_shoulder_y")
+        peak_body_idx = processed_r_shoulder_y["indices_of_peaks"]
+        trough_body_idx = processed_r_shoulder_y["indices_of_troughs"]
+        processed_shoulder_hip_y_distance = data_processor.process_unwave_data("shoulder_hip_y_distance")["mean"]
+        processed_wrist_shoulder_y_distance = data_processor.process_wave_data("wrist_shoulder_y_distance")["trough"]
+        hipBoneRange = data_processor.process_wave_data("hip_x_distance")
+        kneeRange = data_processor.process_wave_data("knee_x_distance")
+        ankleRange = data_processor.process_wave_data("ankle_x_distance")
+
+        # more data processing
+        wrist_distance = data_processor.process_unwave_data("wrist_x_distance")["mean"]
+        shoulder_distance = data_processor.process_unwave_data("shoulder_x_distance")["mean"]
+
+        processed_wrist_elbow_shoulder_angle = data_processor.process_wave_data("wrist_elbow_shoulder_angle")
+        processed_nose_shoulder_vertical_angle = data_processor.process_wave_data("nose_shoulder_vertical_angle")
+
+        pullup_info: PullUpInfo = {
+            'raw_keypoints': raw_keypoints,
+            "raw_data": raw_data,
+            "wristDistance": wrist_distance,
+            "shoulderDistance": shoulder_distance,
+            "hipBoneRange": hipBoneRange["peak"] - hipBoneRange["trough"],
+            "mean_wrist_elbow_shoulder_angle": processed_wrist_elbow_shoulder_angle["mean"],
+            "mean_wrist_elbow_shoulder_angle_trough_idx": processed_wrist_elbow_shoulder_angle["indices_of_troughs"],
+            "low_wrist_elbow_shoulder_angle": processed_wrist_elbow_shoulder_angle["peak"],
+            "trough_body_idx": processed_wrist_elbow_shoulder_angle["indices_of_troughs"],
+            "high_wrist_elbow_shoulder_angle": processed_wrist_elbow_shoulder_angle["trough"],
+            "left_ankle": (processed_l_ankle_x["mean"], processed_l_ankle_y["mean"]),
+            "left_knee": (processed_l_knee_x["mean"], processed_l_knee_y["mean"]),
+            "right_ankle": (processed_r_ankle_x["mean"], processed_r_ankle_y["mean"]),
+            "right_knee": (processed_r_knee_x["mean"], processed_r_knee_y["mean"]),
+            "nose_shoulder_vertical_angle": processed_nose_shoulder_vertical_angle["mean"],
+            "nose_shoulder_vertical_angle_peak_idx": processed_nose_shoulder_vertical_angle["indices_of_peaks"],
+            "kneeRange": kneeRange["peak"] - kneeRange["trough"],
+            "ankleRange": ankleRange["peak"] - ankleRange["trough"],
+            "shoulder_hipBone_y_distance": processed_shoulder_hip_y_distance,
+            "wrist_shoulder_y_distance": processed_wrist_shoulder_y_distance,
+            "peak_body_idx": peak_body_idx
+        }
+        return pullup_info
+
+    def _hands_hold_distance(self, info: PullUpInfo) -> str:
         '''判断手腕是否在手肘正上方，用于判断握距是否合适'''
-        # TODO 临时阈值
-        wide_threshold = 5
-        narrow_threshold = 3
-        wide_alpha = 1.5
-        narrow_alpha = 1.3
+        wide_alpha = 2.40
+        narrow_alpha = 1.60
 
-        leftDistance = self.info['high_leftWrist'][0] - self.info['high_leftElbow'][0]
-        rightDistance = self.info['high_rightWrist'][0] - self.info['high_rightElbow'][0]
-
-        if (leftDistance < narrow_threshold and leftDistance > -wide_threshold and rightDistance < wide_threshold 
-              and rightDistance > -narrow_threshold and self.info['wristDistance'] > narrow_alpha * self.info['shoulderDistance'] 
-              and self.info['wristDistance'] < wide_alpha * self.info['shoulderDistance']):
-            return "正确"
-        elif (leftDistance > narrow_threshold and rightDistance < -narrow_threshold 
-              and self.info['wristDistance'] < narrow_alpha * self.info['shoulderDistance']):
-            return "握距过窄"
-        elif (leftDistance < -wide_threshold and rightDistance > wide_threshold 
-              and self.info['wristDistance'] > wide_alpha * self.info['shoulderDistance']):
-            return "握距过宽"
+        if (info['wristDistance'] > narrow_alpha * info['shoulderDistance'] 
+              and info['wristDistance'] < wide_alpha * info['shoulderDistance']):
+            return False
+        elif (info['wristDistance'] < narrow_alpha * info['shoulderDistance']):
+            return True
+        elif (info['wristDistance'] > wide_alpha * info['shoulderDistance']):
+            return True
         else:
-            return "worng info" # TODO 高级层面收到信号后特殊处理
+            return False 
 
-    def elbow(self) -> str:
+    def _elbow(self, info: PullUpInfo) -> str:
         '''实现手肘角度判别'''
-        # TODO 临时阈值
-        tuck_threshold = 30
-        back_threshold = 10
+        tuck_threshold = 85
 
-        if (self.info['mean_wrist_elbow_horizon_angle'][0] > back_threshold and self.info['mean_wrist_elbow_horizon_angle'][1] > back_threshold
-              and self.info['mean_wrist_elbow_horizon_angle'][0] < tuck_threshold and self.info['mean_wrist_elbow_horizon_angle'][1] < tuck_threshold):
-            return "正确"
-        elif self.info['mean_wrist_elbow_horizon_angle'][0] > tuck_threshold and self.info['mean_wrist_elbow_horizon_angle'][1] > tuck_threshold:
-            return "手肘内收"
-        elif self.info['mean_wrist_elbow_horizon_angle'][0] < back_threshold and self.info['mean_wrist_elbow_horizon_angle'][1] < back_threshold:
-            return "手肘后张"
+        if (info['mean_wrist_elbow_shoulder_angle'] > tuck_threshold):
+            return False
+        elif info['mean_wrist_elbow_shoulder_angle'] < tuck_threshold:
+            return True
         else:
-            return "wrong info"
+            return False
 
-    def Loose_shoulder_blades_in_freeFall(self) -> str:
+    def _Loose_shoulder_blades_in_freeFall(self, info: PullUpInfo) -> str:
         '''自由落体肩胛骨松懈判别'''
-        # TODO 临时阈值
-        threshold = 160
+        threshold = 150
 
-        if self.info['low_wrist_elbow_shoulder_angle'] < threshold:
-            return "正确"
-        elif self.info['low_wrist_elbow_shoulder_angle'] > threshold:
-            return "自由落体肩胛骨松懈"
+        if info['low_wrist_elbow_shoulder_angle'] < threshold:
+            return False
+        elif info['low_wrist_elbow_shoulder_angle'] > threshold:
+            return True
         else:
-            return "wrong info"
+            return False
 
-    def Leg_bending_angle(self) -> str:
+    def _Leg_bending_angle(self, info: PullUpInfo) -> str:
         '''腿部弯曲角度过大判别'''
-        if self.info['left_knee'][1] > self.info['left_ankle'][1] and self.info['right_knee'][1] > self.info['right_ankle'][1]:
-            return "正确"
-        elif self.info['left_knee'][1] < self.info['left_ankle'][1] or self.info['right_knee'][1] < self.info['right_ankle'][1]:
-            return "膝盖弯曲角度过大"
+        if info['left_knee'][1] > info['left_ankle'][1] and info['right_knee'][1] > info['right_ankle'][1]:
+            return False
+        elif info['left_knee'][1] < info['left_ankle'][1] or info['right_knee'][1] < info['right_ankle'][1]:
+            return True
         else :
-            return "wrong info"
+            return False
 
-    def action_amplitude(self) -> str:
+    def _action_amplitude(self, info: PullUpInfo) -> str:
         '''实现动作幅度判别'''
-        # TODO 临时阈值
-        large_alpha = 30
-        small_alpha = 10
+        large_alpha = 0.01
+        small_alpha = 0.30
 
-        if (self.info['wrist_shoulder_y_distance'] < large_alpha * self.info['shoulder_hipBone_y_distance']
-            and self.info['wrist_shoulder_y_distance'] > small_alpha * self.info['shoulder_hipBone_y_distance']):
-            return "正确"
-        elif self.info['wrist_shoulder_y_distance'] > large_alpha * self.info['shoulder_hipBone_y_distance']:
-            return "动作幅度过大"
-        elif self.info['wrist_shoulder_y_distance'] < small_alpha * self.info['shoulder_hipBone_y_distance']:
-            return "动作幅度过小"
+        if (info['wrist_shoulder_y_distance'] < large_alpha * info['shoulder_hipBone_y_distance']
+            and info['wrist_shoulder_y_distance'] > small_alpha * info['shoulder_hipBone_y_distance']):
+            return False
+        elif info['wrist_shoulder_y_distance'] < large_alpha * info['shoulder_hipBone_y_distance']:
+            return True
+        elif info['wrist_shoulder_y_distance'] > small_alpha * info['shoulder_hipBone_y_distance']:
+            return True
         else:
-            return "wrong info"
+            return False
 
-    def neck_error(self) -> str:
+    def _neck_error(self, info: PullUpInfo) -> str:
         '''实现颈部错误判别'''
-        # TODO 临时阈值
-        tuck_threshold = 20
-        back_threshold = -5
+        tuck_threshold = 35
 
-        if self.info['nose_shoulder_vertical_angle'] > back_threshold and self.info['nose_shoulder_vertical_angle'] < tuck_threshold:
-            return "正确"
-        elif self.info['nose_shoulder_vertical_angle'] < back_threshold:
-            return "颈部后仰"
-        elif self.info['nose_shoulder_vertical_angle'] > tuck_threshold:
-            return "颈部前伸"
+        if info['nose_shoulder_vertical_angle'] < tuck_threshold:
+            return False
+        elif info['nose_shoulder_vertical_angle'] > tuck_threshold:
+            return True
         else:
-            return "wrong info"
+            return False
 
-    def leg_shake(self) -> str:
+    def _leg_shake(self, info: PullUpInfo) -> str:
         '''实现腿部摇晃判别'''
-        # TODO 临时阈值
-        knee_threshold = 10
-        ankle_threshold = 10
+        knee_threshold = 150
+        ankle_threshold = 180
 
-        if self.info['kneeRange'] < knee_threshold and self.info['ankleRange'] < ankle_threshold:
-            return "正确"
-        elif self.info['kneeRange'] > knee_threshold:
-            return "膝盖摇晃"
-        elif self.info['ankleRange'] > ankle_threshold:
-            return "脚踝摇晃"
-        else:
-            return "wrong info"
+        if info['kneeRange'] < knee_threshold and info['ankleRange'] < ankle_threshold:
+            return False
+        elif info['kneeRange'] > knee_threshold or info['ankleRange'] > ankle_threshold:
+            return True
+        else : return False
 
-    def core_not_tighten(self) -> str:
+    def _core_not_tighten(self, info: PullUpInfo) -> str:
         '''实现核心不稳定判别'''
-        # TODO: 临时阈值
-        threshold = 5
-        if self.info['hipBoneRange'] < threshold:
-            return "正确"
-        elif self.info['hipBoneRange'] > threshold:
-            return "核心未收紧"
+        threshold = 120
+        if info['hipBoneRange'] < threshold:
+            return False
+        elif info['hipBoneRange'] > threshold:
+            return True
         else:
-            return "wrong info"
+            return False
+    
+    def _plot_hands_hold_distance(self, info: PullUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        l_wrist = keypoints.get_int("l_wrist")
+        r_wrist = keypoints.get_int("r_wrist")
+        l_shoulder = keypoints.get_int("l_shoulder")
+        r_shoulder = keypoints.get_int("r_shoulder")
+        cv2.line(frame, l_wrist, r_wrist, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, l_shoulder, r_shoulder, color=(255, 0, 0), thickness=2)
 
+        if PLOT:
+            frame_filename = f"unreasonable_leg_folding_angle.jpg"
+            cv2.imwrite(frame_filename, frame)
 
+        return frame
 
-def extract_angles(points: torch.Tensor) -> Tuple[float, float, float, float]:
-    """引体向上动作必要角度信息提取,提取到的单帧角度信息,格式为包含四个角度的元组(l_angle_elbow, r_angle_elbow, l_angle_shoulder, r_angle_shoulder)"""
+    def _plot_elbow(self, info: PullUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        l_wrist = keypoints.get_int("l_wrist")
+        r_wrist = keypoints.get_int("r_wrist")
+        l_elbow = keypoints.get_int("l_elbow")
+        r_elbow = keypoints.get_int("r_elbow")
+        l_shoulder = keypoints.get_int("l_shoulder")
+        r_shoulder = keypoints.get_int("r_shoulder")
+        
+        overlay = frame.copy()
+        cv2.circle(overlay, l_elbow, 50, color = (255, 0, 0), thickness=-1)
+        cv2.circle(overlay, r_elbow, 50, color = (255, 0, 0), thickness=-1)
+        cv2.addWeighted(overlay, 0.5, frame, 1 - 0.5, 0, frame)
 
+        cv2.line(frame, l_wrist, l_elbow, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, r_wrist, r_elbow, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, l_elbow, l_shoulder, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, r_elbow, r_shoulder, color=(255, 0, 0), thickness=2)
+        if PLOT:
+            frame_filename = f"unreasonable_leg_folding_angle.jpg"
+            cv2.imwrite(frame_filename, frame)
+
+        return frame
+
+    def _plot_Loose_shoulder_blades_in_freeFall(self, info: PullUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        l_wrist = keypoints.get_int("l_wrist")
+        r_wrist = keypoints.get_int("r_wrist")
+        l_elbow = keypoints.get_int("l_elbow")
+        r_elbow = keypoints.get_int("r_elbow")
+        l_shoulder = keypoints.get_int("l_shoulder")
+        r_shoulder = keypoints.get_int("r_shoulder")
+        l_angle = utils.three_points_angle(l_wrist, l_elbow, l_shoulder)
+        r_angle = utils.three_points_angle(r_wrist, r_elbow, r_shoulder)
+        cv2.line(frame, l_wrist, l_elbow, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, r_wrist, r_elbow, color=(255, 0, 0), thickness=2)
+        cv2.putText(frame, str(int(l_angle)), l_elbow, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.line(frame, l_elbow, l_shoulder, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, r_elbow, r_shoulder, color=(255, 0, 0), thickness=2)
+        cv2.putText(frame, str(int(r_angle)), r_elbow, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+        if PLOT:
+            frame_filename = f"unreasonable_leg_folding_angle.jpg"
+            cv2.imwrite(frame_filename, frame)
+
+        return frame
+
+    def _plot_Leg_bending_angle(self, info: PullUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        l_knee = keypoints.get_int("l_knee")
+        r_knee = keypoints.get_int("r_knee")
+        l_ankle = keypoints.get_int("l_ankle")
+        r_ankle = keypoints.get_int("r_ankle")
+        cv2.line(frame, l_knee, r_knee, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, l_ankle, r_ankle, color=(255, 0, 0), thickness=2)
+
+        if PLOT:
+            frame_filename = f"unreasonable_leg_folding_angle.jpg"
+            cv2.imwrite(frame_filename, frame)
+
+        return frame
+
+    def _plot_action_amplitude(self, info: PullUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        l_wrist = keypoints.get_int("l_wrist")
+        r_wrist = keypoints.get_int("r_wrist")
+        l_shoulder = keypoints.get_int("l_shoulder")
+        r_shoulder = keypoints.get_int("r_shoulder")
+        nose = keypoints.get_int("nose")
+        mid_shoulder = ((l_shoulder[0] + r_shoulder[0]) // 2, (l_shoulder[1] + r_shoulder[1]) // 2)
+        cv2.line(frame, l_wrist, r_wrist, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, l_shoulder, r_shoulder, color=(255, 0, 0), thickness=2)
+        cv2.circle(frame, nose, 50, color=(255, 0, 0), thickness=-1)
+        cv2.line(frame, mid_shoulder, nose, color=(255, 0, 0), thickness=2)
+
+        if PLOT:
+            frame_filename = f"unreasonable_leg_folding_angle.jpg"
+            cv2.imwrite(frame_filename, frame)
+
+        return frame
+
+    def _plot_neck_error(self, info: PullUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        raw_keypoints = info["raw_keypoints"]
+        keypoints = Keypoints(raw_keypoints[frame_idx])
+        l_shoulder = keypoints.get_int("l_shoulder")
+        r_shoulder = keypoints.get_int("r_shoulder")
+        nose = keypoints.get_int("nose")
+        angle = utils.three_points_angle(l_shoulder, nose, (l_shoulder[0], nose[1]))
+        cv2.line(frame, l_shoulder, nose, color=(255, 0, 0), thickness=2)
+        cv2.line(frame, r_shoulder, nose, color=(255, 0, 0), thickness=2)
+        cv2.putText(frame, str(int(angle)), l_shoulder, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+        if PLOT:
+            frame_filename = f"unreasonable_leg_folding_angle.jpg"
+            cv2.imwrite(frame_filename, frame)
+
+        return frame
+
+    def _plot_leg_shake(self, info: PullUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        return frame  # 至少两张图片
+
+    def _plot_core_not_tighten(self, info: PullUpInfo, frame_idx: int, frame: np.array) -> np.array:
+        return frame  # 至少两张图片
+
+    def _frame_hands_hold_distance(self, info: PullUpInfo) -> int:
+        """获取能佐证存在握距不合适的视频帧"""
+        len = info["raw_data"].shape[0]
+        return random.randint(len // 3, 2 * len // 3)
+
+    def _frame_elbow(self, info: PullUpInfo) -> int:
+        """获取能佐证存在手肘内收的视频帧"""
+        return random.choice(info["mean_wrist_elbow_shoulder_angle_trough_idx"])
+
+    def _frame_Loose_shoulder_blades_in_freeFall(self, info: PullUpInfo) -> int:
+        """获取能佐证存在自由落体肩胛骨松懈的视频帧"""
+        return random.choice(info["trough_body_idx"])
+
+    def _frame_Leg_bending_angle(self, info: PullUpInfo) -> int:
+        """获取能佐证存在腿部弯曲的视频帧"""
+        len = info["raw_data"].shape[0]
+        return random.randint(len // 3, 2 * len // 3)
+
+    def _frame_action_amplitude(self, info: PullUpInfo) -> int:
+        """获取能佐证存在动作幅度过小的视频帧"""
+        return random.choice(info["peak_body_idx"])
+
+    def _frame_neck_error(self, info: PullUpInfo) -> int:
+        """获取能佐证存在颈部前倾的视频帧"""
+        return random.choices(info["nose_shoulder_vertical_angle_peak_idx"])
+
+    def _frame_leg_shake(self, info: PullUpInfo) -> int:
+        """获取能佐证存在腿部摇晃的视频帧"""
+        len = info["raw_data"].shape[0]
+        return random.randint(len // 3, 2 * len // 3) # 至少两张图片
+
+    def _frame_core_not_tighten(self, info: PullUpInfo) -> int:
+        """获取能佐证存在核心不稳的视频帧"""
+        len = info["raw_data"].shape[0]
+        return random.randint(len // 3, 2 * len // 3) # 至少两张图片
+
+def extract_points(points: torch.Tensor):
+    """引体向上动作必要角度信息提取,提取到的单帧点信息,格式为包含点信息的元组"""
     if points.size(0) == 0: return (0, 0, 0, 0)
-
     keypoints = Keypoints(points)
+    l_wrist_x = keypoints.get("l_wrist")[0]
+    l_wrist_y = keypoints.get("l_wrist")[1]
+    r_wrist_x = keypoints.get("r_wrist")[0]
+    r_wrist_y = keypoints.get("r_wrist")[1]
+    wrist_x_distance = abs(l_wrist_x - r_wrist_x)
+    l_shoulder_x = keypoints.get("l_shoulder")[0]
+    l_shoulder_y = keypoints.get("l_shoulder")[1]
+    r_shoulder_x = keypoints.get("r_shoulder")[0]
+    r_shoulder_y = keypoints.get("r_shoulder")[1]
+    shoulder_x_distance = abs(l_shoulder_x - r_shoulder_x)
+    l_hip_x = keypoints.get("l_hip")[0]
+    l_hip_y = keypoints.get("l_hip")[1]
+    r_hip_x = keypoints.get("r_hip")[0]
+    r_hip_y = keypoints.get("r_hip")[1]
+    l_knee_x = keypoints.get("l_knee")[0]
+    l_knee_y = keypoints.get("l_knee")[1]
+    r_knee_x = keypoints.get("r_knee")[0]
+    r_knee_y = keypoints.get("r_knee")[1]
+    l_ankle_x = keypoints.get("l_ankle")[0]
+    l_ankle_y = keypoints.get("l_ankle")[1]
+    r_ankle_x = keypoints.get("r_ankle")[0]
+    r_ankle_y = keypoints.get("r_ankle")[1]
+    shoulder_hip_y_distance = abs((l_shoulder_y + r_shoulder_y) - (l_hip_y + r_hip_y))/2
+    wrist_shoulder_y_distance = abs((l_wrist_y + r_wrist_y) - (l_shoulder_y + r_shoulder_y))/2
+    hip_x_distance = (l_hip_x + r_hip_x) / 2
+    knee_x_distance = (l_knee_x + r_knee_x) / 2
+    ankle_x_distance = (l_ankle_x + r_ankle_x) / 2
 
     l_wrist = keypoints.get("l_wrist")
     r_wrist = keypoints.get("r_wrist")
@@ -190,170 +437,23 @@ def extract_angles(points: torch.Tensor) -> Tuple[float, float, float, float]:
     r_elbow = keypoints.get("r_elbow")
     l_shoulder = keypoints.get("l_shoulder")
     r_shoulder = keypoints.get("r_shoulder")
-    l_hip = keypoints.get("l_hip")
-    r_hip = keypoints.get("r_hip")
+    nose = keypoints.get("nose")
 
-    l_angle_elbow = utils.three_points_angle(l_wrist,l_elbow,l_shoulder)
-    r_angle_elbow = utils.three_points_angle(r_wrist,r_elbow,r_shoulder)
-    l_angle_shoulder = utils.three_points_angle(l_elbow,l_shoulder,l_hip)
-    r_angle_shoulder = utils.three_points_angle(r_elbow,r_shoulder,r_hip)
+    l_wrist_elbow_shoulder_angle = utils.three_points_angle(l_wrist,l_elbow,l_shoulder)
+    r_wrist_elbow_shoulder_angle = utils.three_points_angle(r_wrist,r_elbow,r_shoulder)
+    wrist_elbow_shoulder_angle = (l_wrist_elbow_shoulder_angle + r_wrist_elbow_shoulder_angle) / 2
+    nose_shoulder_vertical_angle = utils.three_points_angle(nose, l_shoulder, (l_shoulder[0], nose[1]))
+    return (l_wrist_y, r_wrist_y, wrist_x_distance, l_shoulder_y, r_shoulder_y, 
+            shoulder_x_distance, l_knee_x, knee_x_distance, ankle_x_distance,
+            l_knee_y, r_knee_x, r_knee_y, l_ankle_x, l_ankle_y, r_ankle_x, hip_x_distance,
+            r_ankle_y, shoulder_hip_y_distance, wrist_shoulder_y_distance, wrist_elbow_shoulder_angle, 
+            nose_shoulder_vertical_angle), ["l_wrist_y", "r_wrist_y", "wrist_x_distance", "l_shoulder_y", "r_shoulder_y",
+                "shoulder_x_distance", "l_knee_x", "knee_x_distance", "ankle_x_distance", "l_knee_y", "r_knee_x", 
+                "r_knee_y", "l_ankle_x", "l_ankle_y", "r_ankle_x", "hip_x_distance", "r_ankle_y", "shoulder_hip_y_distance", 
+                "wrist_shoulder_y_distance", "wrist_elbow_shoulder_angle", "nose_shoulder_vertical_angle"]
 
-    return (l_angle_elbow, r_angle_elbow, l_angle_shoulder, r_angle_shoulder)
-
-
-
-def plot_angles(frame: np.array ,points: torch.Tensor) -> np.array:
-    """extract_angles将提取出的角度信息绘制在每一视频帧，并返回新的视频帧"""
-
-    angles = extract_angles(points)
-    keypoints = Keypoints(points)
-
-    l_shoulder = keypoints.get("l_shoulder")
-    r_shoulder = keypoints.get("r_shoulder")
-    l_elbow = keypoints.get("l_elbow")
-    r_elbow = keypoints.get("r_elbow")
-
-    l_angle_elbow_text = f"{angles[0]:.2f}"
-    r_angle_elbow_text = f"{angles[1]:.2f}"
-    l_angle_shoulder_text = f"{angles[2]:.2f}"
-    r_angle_shoulder_text = f"{angles[3]:.2f}"
-
-    cv2.putText(frame, l_angle_elbow_text, tuple(map(int, l_elbow)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-    cv2.putText(frame, r_angle_elbow_text, tuple(map(int, r_elbow)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-    cv2.putText(frame, l_angle_shoulder_text, tuple(map(int, l_shoulder)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-    cv2.putText(frame, r_angle_shoulder_text, tuple(map(int, r_shoulder)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-
-    return frame
-
-
-
-def is_wrist_above_elbow(frame: np.array ,points: torch.Tensor) -> np.array:
-    """判断手腕是否在手肘正上方，用于判断握距是否合适"""
-
-    if points.size(0) == 0: return frame
-
-    is_wrist_above_elbow = False
-    threshold = 5
-
-    points = Keypoints(points)
-
-    direction_vector = (0, -1.0)
-
-    l_wrist = points.get("l_wrist")
-    r_wrist = points.get("r_wrist")
-    l_elbow = points.get("l_elbow")
-    r_elbow = points.get("r_elbow")
-
-    l_vector = tuple(map(lambda x, y: x - y, l_wrist, l_elbow))
-    r_vector = tuple(map(lambda x, y: x - y, r_wrist, r_elbow))
-
-    l_angle = utils.two_vector_angle(l_vector,direction_vector)
-    r_angle = utils.two_vector_angle(r_vector,direction_vector)
-
-    l_angle_text = f"{l_angle:.2f}"
-    r_angle_text = f"{r_angle:.2f}"
-
-    l_text_location = tuple(map(lambda x, y: (x + y)/2, l_wrist, l_elbow))
-    r_text_location = tuple(map(lambda x, y: (x + y)/2, r_wrist, r_elbow))
-
-    cv2.putText(frame, l_angle_text, tuple(map(int, l_text_location)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-    cv2.putText(frame, r_angle_text, tuple(map(int, r_text_location)), cv2.FONT_HERSHEY_SIMPLEX, 1, (84, 44, 151), 2)
-
-    if (l_angle + r_angle) / 2 < threshold:
-           is_wrist_above_elbow = True
-
-    cv2.putText(frame, f"Is the grip distance appropriate?:{is_wrist_above_elbow}", (40, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-
-    return frame
-
-
-def back_video2csv(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
-    """
-    使用YOLO处理**引体向上/背部视角**视频,并将分析结果以csv的格式存入指定文件夹
-
-    Args:
-        input_path (str): 输入视频地址
-        output_path (str): 输出csv地址
-        model (YOLO): 所使用的YOLO模型
-    """
-    results = model(source=input_path, stream=True, **keywarg)  # generator of Results objects
-    frame_idx = 0
-    angles_data = []
-    for r in results:
-        # processing
-        keypoints = utils.extract_main_person(r)
-        angles = extract_angles(keypoints)
-        angles_data.append(angles)
-            
-        frame_idx += 1
-
-    df = pd.DataFrame(angles_data, columns=['l_elbow_angles', 'r_elbow_angles', 'l_shoulder_angles', 'r_shoulder_angles'], index= list(range(1, frame_idx + 1)))
-    df.to_csv(output_path, index_label='idx')
-
-
-# TODO: 实现侧面视角的数据提取，并为合适的数据构建csv
-def side_video2csv(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
-    """
-    使用YOLO处理**引体向上/侧面视角**视频,并将分析结果以csv的格式存入指定文件夹
-
-    Args:
-        input_path (str): 输入视频地址
-        output_path (str): 输出csv地址
-        model (YOLO): 所使用的YOLO模型
-    """
-    pass
-
-
-def back_video2video_(frame: np.array ,points: torch.Tensor) -> np.array:
-    """back_video2video的辅助方法，背部视角的处理逻辑精简集中于此，这里定义了对每一视频帧的处理逻辑
-
-    Args:
-        frame (np.array): 原视频帧
-        points (torch.Tensor): 骨架节点集合
-
-    Returns:
-        np.array: 处理后的视频帧
-    """
-    # processing
-    frame = plot_angles(frame, points)
-
-    return frame
-
-
-def back_video2video(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
-    """
-    使用YOLO处理**引体向上/背部视角**视频,添加便于直观感受的特征展示,并将分析结果以mp4的格式存入指定文件夹
-
-    Args:
-        input_path (str): 输入视频地址
-        output_path (str): 输出mp4地址
-        model (YOLO): 所使用的YOLO模型
-    """
-    utils.video2video_base_(back_video2video_, input_path, output_path, model, **keywarg)
-
-
-# TODO: 侧面视角每一视频帧的处理逻辑
-def side_video2video_(frame: np.array ,points: torch.Tensor) -> np.array:
-    """side_video2video的辅助方法，侧面视角的处理逻辑精简集中于此，这里定义了对每一视频帧的处理逻辑
-
-    Args:
-        frame (np.array): 原视频帧
-        points (torch.Tensor): 骨架节点集合
-
-    Returns:
-        np.array: 处理后的视频帧
-    """
-    pass
-
-
-def side_video2video(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
-    """
-    使用YOLO处理**引体向上/侧面视角**视频,添加便于直观感受的特征展示,并将分析结果以mp4的格式存入指定文件夹
-
-    Args:
-        input_path (str): 输入视频地址
-        output_path (str): 输出mp4地址
-        model (YOLO): 所使用的YOLO模型
-    """
-    utils.video2video_base_(side_video2video_, input_path, output_path, model, **keywarg)
-
+# # use-case
+# model = YOLO(r"E:\算法\项目管理\FitFormAI\model\yolov8n-pose.pt")
+# pullup = PullUp(model)
+# path = r"E:\算法\项目管理\FitFormAI\resource\引体向上\正侧面视角\手肘不合理\IMG_6086.MOV"
+# pullup.do_analysis(path)
