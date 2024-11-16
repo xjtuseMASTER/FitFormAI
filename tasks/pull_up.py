@@ -11,17 +11,9 @@ from keypoints import Keypoints
 from task_base import TaskBase, InfoBase, ErrorDetail
 from data_processor import DateProcessor
 
-PLOT = True
+PLOT = False
 
 class PullUpInfo(InfoBase):
-    # TODO: 定义返回值类型
-    """
-    TODO
-    leftElbow (Tuple[float, float]): 手肘坐标
-    rightElbow (Tuple[float, float]): 手肘坐标
-    leftWrist (Tuple[float, float]): 手腕坐标
-    rightWrist (Tuple[float, float]): 手腕坐标
-    """
     wristDistance : float # 手腕距离，正值
     shoulderDistance : float # 肩膀距离，正值
 
@@ -146,7 +138,7 @@ class PullUp(TaskBase):
         }
         return pullup_info
 
-    def _hands_hold_distance(self, info: PullUpInfo) -> str:
+    def _hands_hold_distance(self, info: PullUpInfo) -> bool:
         '''判断手腕是否在手肘正上方，用于判断握距是否合适'''
         wide_alpha = 2.40
         narrow_alpha = 1.60
@@ -161,7 +153,7 @@ class PullUp(TaskBase):
         else:
             return False 
 
-    def _elbow(self, info: PullUpInfo) -> str:
+    def _elbow(self, info: PullUpInfo) -> bool:
         '''实现手肘角度判别'''
         tuck_threshold = 85
 
@@ -172,7 +164,7 @@ class PullUp(TaskBase):
         else:
             return False
 
-    def _Loose_shoulder_blades_in_freeFall(self, info: PullUpInfo) -> str:
+    def _Loose_shoulder_blades_in_freeFall(self, info: PullUpInfo) -> bool:
         '''自由落体肩胛骨松懈判别'''
         threshold = 150
 
@@ -183,7 +175,7 @@ class PullUp(TaskBase):
         else:
             return False
 
-    def _Leg_bending_angle(self, info: PullUpInfo) -> str:
+    def _Leg_bending_angle(self, info: PullUpInfo) -> bool:
         '''腿部弯曲角度过大判别'''
         if info['left_knee'][1] > info['left_ankle'][1] and info['right_knee'][1] > info['right_ankle'][1]:
             return False
@@ -192,7 +184,7 @@ class PullUp(TaskBase):
         else :
             return False
 
-    def _action_amplitude(self, info: PullUpInfo) -> str:
+    def _action_amplitude(self, info: PullUpInfo) -> bool:
         '''实现动作幅度判别'''
         large_alpha = 0.01
         small_alpha = 0.30
@@ -207,7 +199,7 @@ class PullUp(TaskBase):
         else:
             return False
 
-    def _neck_error(self, info: PullUpInfo) -> str:
+    def _neck_error(self, info: PullUpInfo) -> bool:
         '''实现颈部错误判别'''
         tuck_threshold = 35
 
@@ -218,7 +210,7 @@ class PullUp(TaskBase):
         else:
             return False
 
-    def _leg_shake(self, info: PullUpInfo) -> str:
+    def _leg_shake(self, info: PullUpInfo) -> bool:
         '''实现腿部摇晃判别'''
         knee_threshold = 150
         ankle_threshold = 180
@@ -229,7 +221,7 @@ class PullUp(TaskBase):
             return True
         else : return False
 
-    def _core_not_tighten(self, info: PullUpInfo) -> str:
+    def _core_not_tighten(self, info: PullUpInfo) -> bool:
         '''实现核心不稳定判别'''
         threshold = 120
         if info['hipBoneRange'] < threshold:

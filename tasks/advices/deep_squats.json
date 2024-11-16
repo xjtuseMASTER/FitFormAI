@@ -1,0 +1,10 @@
+{
+    "lean_forward": {
+        "error": "身体前倾",
+        "advice": " "
+    },
+    "not_enough_squat_distance": {
+        "error": "下蹲距离不够",
+        "advice": " "
+    }
+}
