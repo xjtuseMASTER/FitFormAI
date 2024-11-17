@@ -89,8 +89,7 @@ class Deepsquat(TaskBase):
 
     def _lean_forward(self, info: DeepsquatInfo) -> bool:
         """判断是否前倾"""
-        # TODO 临时阈值
-        threshold = 80
+        threshold = 70
 
         if info["shoulder_hip_knee_angle_trough"] < threshold:
             return True
@@ -99,8 +98,7 @@ class Deepsquat(TaskBase):
     
     def _not_enough_squat_distance(self, info: DeepsquatInfo) -> bool:
         """判断是否下蹲不够"""
-        # TODO 临时阈值
-        threshold = 50
+        threshold = -200
 
         if info["hip_y_trough"] - info["knee_y_mean"] > threshold:
             return True
@@ -117,9 +115,9 @@ class Deepsquat(TaskBase):
         r_hip = keypoints.get_int("r_hip")
         l_knee = keypoints.get_int("l_knee")
         r_knee = keypoints.get_int("r_knee")
-        shoulder = (l_shoulder + r_shoulder) // 2
-        hip = (l_hip + r_hip) // 2
-        knee = (l_knee + r_knee) // 2
+        shoulder = ((l_shoulder[0] + r_shoulder[0]) // 2, (l_shoulder[1] + r_shoulder[1]) // 2)
+        hip = ((l_hip[0] + r_hip[0]) // 2, (l_hip[1] + r_hip[1]) // 2)
+        knee = ((l_knee[0] + r_knee[0]) // 2, (l_knee[1] + r_knee[1]) // 2)
 
         angle = utils.three_points_angle(shoulder, hip, knee)
         cv2.line(frame, shoulder, hip, (0, 255, 0), 2)
@@ -187,5 +185,5 @@ def extract_points(points: torch.Tensor):
 # # use-case
 model = YOLO(r"E:\算法\项目管理\FitFormAI\model\yolov8n-pose.pt")
 deepsquat = Deepsquat(model)
-path = r"E:\算法\项目管理\FitFormAI\resource\引体向上\正侧面视角\手肘不合理\IMG_6086.MOV"
+path = r"E:\算法\项目管理\FitFormAI\resource\深蹲\正面\标准\4.mp4"
 deepsquat.do_analysis(path)

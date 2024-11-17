@@ -6,5 +6,9 @@
     "not_enough_squat_distance": {
         "error": "下蹲距离不够",
         "advice": " "
+    },
+    "knee_buckle": {
+        "error": "膝盖内扣",
+        "advice": " "
     }
 }
