@@ -45,7 +45,7 @@ def process_by_view(src_view_dir: str) -> None:
                 task_processor.process_video2csv(src_path)
 
 if __name__ == "__main__":
-    process_by_view("resource/平板支撑/侧面视角")
+    process_by_view("resource/俯卧撑/正面视角")
 
 # src_file = "resource/仰卧起坐/侧面视角/肩胛骨未触垫/仰卧起坐-侧面视角-肩胛骨未触垫.MOV"
 # task_processor = TaskProcessor(setup_model())

@@ -13,7 +13,7 @@ from ultralytics import YOLO
 
 from keypoints import Keypoints
 
-__all__ = ["extract_main_person", "show_keypoints", "video2video_base_", "three_points_angle"]
+__all__ = ["extract_main_person", "show_keypoints", "video2video_base_", "three_points_angle", "angle_between_vectors"]
 
 def extract_main_person(result: torch.Tensor) -> torch.Tensor:
     """抽取画面中的主体人物，一般来说拍摄主体总会是面积最大的一个，所以可以通过比较所有person的面积得到主体人物
@@ -220,3 +220,39 @@ def translate_point_by_vector(point, start_point, end_point):
     
     translated_point = P + vector
     return tuple(translated_point.astype(int))
+
+
+def angle_between_vectors(v1: Tuple[float, float], v2: Tuple[float, float]) -> float:
+    """
+    计算两个向量之间的夹角（单位：度）
+
+    Args:
+        v1 (Tuple[float, float]): 向量1，格式为 (x, y)
+        v2 (Tuple[float, float]): 向量2，格式为 (x, y)
+
+    Returns:
+        float: 两个向量之间的夹角，单位为度。如果输入向量为零向量，返回 -1.0
+    """
+    if np.array_equal(v1, (0, 0)) or np.array_equal(v2, (0, 0)):
+        return -1.0
+
+    # 将元组转换为 NumPy 数组
+    v1 = np.array(v1)
+    v2 = np.array(v2)
+
+    # 计算向量的点积
+    dot_product = np.dot(v1, v2)
+
+    # 计算向量的模长
+    magnitude_v1 = np.linalg.norm(v1)
+    magnitude_v2 = np.linalg.norm(v2)
+
+    # 计算夹角的余弦值，并确保数值在 [-1, 1] 范围内，避免数值误差
+    cos_theta = dot_product / (magnitude_v1 * magnitude_v2)
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+
+    # 计算夹角（弧度制），然后转换为角度制
+    angle = np.arccos(cos_theta)
+    angle_degrees = np.degrees(angle)
+
+    return angle_degrees
