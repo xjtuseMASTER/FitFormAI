@@ -44,13 +44,14 @@ def process_by_view(src_view_dir: str) -> None:
                 # processing
                 task_processor.process_video2csv(src_path)
 
-# process_by_view("resource/仰卧起坐/侧面视角")
+if __name__ == "__main__":
+    process_by_view("resource/平板支撑/侧面视角")
 
 # src_file = "resource/仰卧起坐/侧面视角/肩胛骨未触垫/仰卧起坐-侧面视角-肩胛骨未触垫.MOV"
 # task_processor = TaskProcessor(setup_model())
 # dest_path = task_processor.process_video2csv(src_file)
 
 
-setup = SetUp(setup_model())
-results = setup.do_analysis("resource/仰卧起坐/侧面视角/腰部弹震借力/仰卧起坐-侧面视角-腰部弹震借力(2).MOV")
-print(results)
+# setup = SetUp(setup_model())
+# results = setup.do_analysis("resource/仰卧起坐/侧面视角/腰部弹震借力/仰卧起坐-侧面视角-腰部弹震借力(2).MOV")
+# print(results)

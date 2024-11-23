@@ -183,7 +183,7 @@ def extract_points(points: torch.Tensor):
     return (hip_y, knee_y, shoulder_hip_knee_angle), ["hip_y", "knee_y", "shoulder_hip_knee_angle"]
 
 # # use-case
-model = YOLO(r"E:\算法\项目管理\FitFormAI\model\yolov8n-pose.pt")
-deepsquat = Deepsquat(model)
-path = r"E:\算法\项目管理\FitFormAI\resource\深蹲\正面\标准\4.mp4"
-deepsquat.do_analysis(path)
+# model = YOLO(r"E:\算法\项目管理\FitFormAI\model\yolov8n-pose.pt")
+# deepsquat = Deepsquat(model)
+# path = r"E:\算法\项目管理\FitFormAI\resource\深蹲\正面\标准\4.mp4"
+# deepsquat.do_analysis(path)
