@@ -1,5 +1,5 @@
 import os
-import pull_up, set_ups
+import pull_up, set_ups, plank
 from pathlib import Path
 from ultralytics import YOLO
 
@@ -10,15 +10,18 @@ class TaskProcessor:
         self.model = model
         self.video2csv_methods = {  
             #同一视角可以提取的数据特征基本一致，故video2csv_methods以**动作/视角**区分
-            '引体向上/背部视角':pull_up.back_video2csv,
-            '引体向上/侧面视角':pull_up.side_video2csv,
-            '仰卧起坐/侧面视角':set_ups.side_video2csv
+            # '引体向上/背部视角':pull_up.back_video2csv,
+            # '引体向上/侧面视角':pull_up.side_video2csv,
+            '仰卧起坐/侧面视角':set_ups.side_video2csv,
+            '平板支撑/侧面视角':plank.side_video2csv
         }
         self.video2video_methods = {
-            '引体向上/背部视角':pull_up.back_video2video,
-            '引体向上/侧面视角':pull_up.side_video2video,
-            '仰卧起坐/侧面视角':set_ups.side_video2video
+            # '引体向上/背部视角':pull_up.back_video2video,
+            # '引体向上/侧面视角':pull_up.side_video2video,
+            '仰卧起坐/侧面视角':set_ups.side_video2video,
+            '平板支撑/侧面视角':plank.side_video2video
         }
+        
     
 
     def process_video2csv(self, input_path: str, **keywarg: any) -> str:
