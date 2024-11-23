@@ -214,9 +214,18 @@ class Plank(TaskBase):
         Returns:
             int: 帧索引
         """
-        total_frames = len(info["raw_keypoints"])
-        # 选择中间位置的帧，假设错误可能出现在此处
-        return total_frames // 2
+        # 从髋部 y 坐标数据中找到撅屁股的帧索引
+        hip_y = info["raw_data"]["hip_y"]
+        shoulder_y = info["raw_data"]["shoulder_y"]
+        threshold = -10  # 髋部高于肩部一定阈值视为撅屁股
+        indices = (hip_y < shoulder_y + threshold).index.tolist()
+        if indices:
+            # 返回髋部最高的帧索引
+            max_hip_y_idx = hip_y.idxmax()
+            return max_hip_y_idx
+        else:
+            # 若未找到，则返回中间帧索引
+            return len(info["raw_keypoints"]) // 2
 
     def _frame_sagging_waist(self, info: PlankInfo) -> int:
         """
@@ -228,9 +237,20 @@ class Plank(TaskBase):
         Returns:
             int: 帧索引
         """
-        total_frames = len(info["raw_keypoints"])
-        # 选择中间位置的帧，假设错误可能出现在此处
-        return total_frames // 2
+        # 从髋部 y 坐标数据中找到塌腰的帧索引
+        hip_y = info["raw_data"]["hip_y"]
+        shoulder_y = info["raw_data"]["shoulder_y"]
+        ankle_y = info["raw_data"]["ankle_y"]
+        mid_shoulder_ankle_y = (shoulder_y + ankle_y) / 2
+        threshold = 10  # 髋部低于肩部与踝部连线一定阈值视为塌腰
+        indices = (hip_y > mid_shoulder_ankle_y + threshold).index.tolist()
+        if indices:
+            # 返回髋部最低的帧索引
+            min_hip_y_idx = hip_y.idxmin()
+            return min_hip_y_idx
+        else:
+            # 若未找到，则返回中间帧索引
+            return len(info["raw_keypoints"]) // 2
 
 
 def side_video2csv(input_path: str, output_path: str, model: YOLO, **keywarg: any) -> None:
@@ -361,6 +381,6 @@ def plot_angles(frame: np.array ,points: torch.Tensor) -> np.array:
 if __name__ == "__main__":
     model = YOLO("/home/shyang/code/FitFormAI_Analysiser/model/yolov8x-pose.pt")
     plank = Plank(model)
-    path = "/home/shyang/code/FitFormAI_Analysiser/resource/平板支撑/侧面视角/塌腰/0.mp4"
+    path = "/home/shyang/code/FitFormAI_Analysiser/resource/平板支撑/侧面视角/撅屁股/0.mp4"
     results = plank.do_analysis(path)
     print(results)
