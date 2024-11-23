@@ -3,7 +3,7 @@ import json
 
 def load_advice_by_filename( filename: str):
     """根据文件名从指定文件夹加载 JSON 文件并返回其内容"""
-    file_path = os.path.join('advices', filename)
+    file_path = os.path.join('tasks/advices', filename)
     
     if not os.path.isfile(file_path):
         print(f"错误：文件 {filename} 不存在于 tasks/advices 中。")
