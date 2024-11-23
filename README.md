@@ -2,6 +2,8 @@
 基于yolo的健身姿势检测与姿态矫正建议系统
 
 ## 项目结构
+
+```
 .
 ├── README.md  
 ├── requirements.txt  
@@ -48,6 +50,7 @@
     ├── pull_up.py  
     ├── task_processor.py  
     └── utils.py   
+```
 
 * `model`:保存模型参数
 * `config.yaml`:配置文件
