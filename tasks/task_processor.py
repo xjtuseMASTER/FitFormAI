@@ -1,5 +1,5 @@
 import os
-import pull_up, set_ups, plank
+import pull_up, set_ups, plank, push_up
 from pathlib import Path
 from ultralytics import YOLO
 
@@ -13,13 +13,17 @@ class TaskProcessor:
             # '引体向上/背部视角':pull_up.back_video2csv,
             # '引体向上/侧面视角':pull_up.side_video2csv,
             '仰卧起坐/侧面视角':set_ups.side_video2csv,
-            '平板支撑/侧面视角':plank.side_video2csv
+            '平板支撑/侧面视角':plank.side_video2csv,
+            '俯卧撑/侧面视角':push_up.side_video2csv,
+            '俯卧撑/正面视角':push_up.front_video2csv
         }
         self.video2video_methods = {
             # '引体向上/背部视角':pull_up.back_video2video,
             # '引体向上/侧面视角':pull_up.side_video2video,
             '仰卧起坐/侧面视角':set_ups.side_video2video,
-            '平板支撑/侧面视角':plank.side_video2video
+            '平板支撑/侧面视角':plank.side_video2video,
+            '俯卧撑/侧面视角':push_up.side_video2video,
+            '俯卧撑/正面视角':push_up.front_video2video
         }
         
     

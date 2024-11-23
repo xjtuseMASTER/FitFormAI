@@ -1,0 +1,22 @@
+{
+    "not_in_straight_line": {
+        "error": "身体未保持直线",
+        "advice": "保持头部、肩部、髋部和脚踝在同一条直线上，收紧核心肌群，避免臀部上抬或下沉。"
+    },
+    "insufficient_amplitude": {
+        "error": "动作幅度不足",
+        "advice": "下放时肘关节应弯曲至90度以下，充分降低身体，确保动作标准。"
+    },
+    "arms_extended_forward": {
+        "error": "手臂前伸",
+        "advice": "手腕应位于肩膀正下方，避免手臂过度前伸，影响动作效果。"
+    },
+    "arms_abduction": {
+        "error": "手臂外展",
+        "advice": "手肘应贴近身体两侧，避免手臂过度外展，增加肩部压力。"
+    },
+    "forearm_not_vertical": {
+        "error": "小臂未垂直",
+        "advice": "保持小臂垂直于地面，确保力量传导正确。"
+    }
+}
